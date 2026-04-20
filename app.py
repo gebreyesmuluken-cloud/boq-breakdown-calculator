@@ -515,10 +515,10 @@ def fmt_money(value):
     return f"{float(value):,.2f}"
 
 
-def make_new_breakdown_row(row_type="M", level=2):
+def make_new_breakdown_row():
     return {
-        "Type": row_type,
-        "Level": level,
+        "Type": "M",
+        "Level": 2,
         "Category": "",
         "Code": "",
         "Description": "",
@@ -535,13 +535,17 @@ def make_new_breakdown_row(row_type="M", level=2):
 def get_selected_indexes(selected_rows):
     indexes = []
     for row in selected_rows or []:
-        node_index = row.get("_selectedRowNodeInfo", {}).get("nodeRowIndex")
-        if node_index is not None:
-            indexes.append(int(node_index))
+        node_row_index = row.get("_selectedRowNodeInfo", {}).get("nodeRowIndex")
+        if node_row_index is not None:
+            indexes.append(int(node_row_index))
     return sorted(set(indexes))
 
 
-def build_breakdown_grid(df: pd.DataFrame):
+def breakdown_grid(article_id: str):
+    df = get_breakdown(article_id).copy()
+    if df.empty:
+        df = empty_breakdown_df()
+
     gb = GridOptionsBuilder.from_dataframe(df)
     gb.configure_default_column(editable=st.session_state.edit_mode, resizable=True, sortable=False, filter=False)
     gb.configure_selection("multiple", use_checkbox=True)
@@ -556,19 +560,45 @@ def build_breakdown_grid(df: pd.DataFrame):
     row_style = JsCode(
         """
         function(params) {
-            if (!params.data || !params.data.Type) return {};
+            if (!params.data || !params.data.Type) {
+                return {};
+            }
             const t = String(params.data.Type).toUpperCase();
-            if (t === "O") return {backgroundColor: "#fde68a", fontWeight: "700"};
-            if (t === "S") return {backgroundColor: "#bfdbfe", fontWeight: "600"};
-            if (t === "M") return {backgroundColor: "#dcfce7"};
+            if (t === "O") {
+                return {backgroundColor: "#fde68a", fontWeight: "700"};
+            }
+            if (t === "S") {
+                return {backgroundColor: "#bfdbfe", fontWeight: "600"};
+            }
+            if (t === "M") {
+                return {backgroundColor: "#dcfce7"};
+            }
             return {};
         }
         """
     )
 
-    options = gb.build()
-    options["getRowStyle"] = row_style
-    return options
+    grid_options = gb.build()
+    grid_options["getRowStyle"] = row_style
+
+    response = AgGrid(
+        df,
+        gridOptions=grid_options,
+        data_return_mode=DataReturnMode.AS_INPUT,
+        update_mode=GridUpdateMode.VALUE_CHANGED | GridUpdateMode.SELECTION_CHANGED,
+        fit_columns_on_grid_load=False,
+        allow_unsafe_jscode=True,
+        theme="streamlit",
+        height=420,
+        reload_data=False,
+    )
+
+    updated_df = pd.DataFrame(response["data"])
+    if updated_df.empty:
+        updated_df = empty_breakdown_df()
+
+    set_breakdown(article_id, updated_df)
+    return response
 
 
 init_state()
@@ -753,9 +783,7 @@ if selected_article:
     ]
     if not article_row.empty:
         article = article_row.iloc[0]
-
-        if get_breakdown(selected_article).empty and str(article["Template_Name"]).strip():
-            load_template(selected_article, article["Template_Name"])
+        ensure_article_breakdown(selected_article, article["Template_Name"])
 
         st.markdown("<div class='panel'>", unsafe_allow_html=True)
         st.markdown(
@@ -772,57 +800,15 @@ if selected_article:
         calc_clicked = top_cols[3].button("Calculate This Article", use_container_width=True)
         close_clicked = top_cols[4].button("Close", use_container_width=True)
 
-        breakdown = get_breakdown(selected_article).copy()
-
-        selected_indexes = []
-        if breakdown.empty:
-            st.warning("No breakdown rows yet. Click Reload Template or Add Row.")
-        else:
-            breakdown["Type"] = breakdown["Type"].apply(normalize_type_value)
-            breakdown["Norm"] = breakdown["Norm"].apply(normalize_norm_value)
-
-            grid_response = AgGrid(
-                breakdown,
-                gridOptions=build_breakdown_grid(breakdown),
-                data_return_mode=DataReturnMode.AS_INPUT,
-                update_mode=GridUpdateMode.VALUE_CHANGED | GridUpdateMode.SELECTION_CHANGED,
-                fit_columns_on_grid_load=True,
-                allow_unsafe_jscode=True,
-                theme="streamlit",
-                height=420,
-                key=f"breakdown_grid_{selected_article}",
-                reload_data=False,
-            )
-
-            updated_breakdown = pd.DataFrame(grid_response["data"])
-            if not updated_breakdown.empty:
-                set_breakdown(selected_article, updated_breakdown)
-
-            selected_indexes = get_selected_indexes(grid_response.get("selected_rows", []))
+        grid_response = breakdown_grid(selected_article)
+        selected_indexes = get_selected_indexes(grid_response.get("selected_rows", []))
 
         if add_clicked:
             breakdown = get_breakdown(selected_article)
-
-            if selected_indexes:
-                selected_index = selected_indexes[0]
-                selected_type = normalize_type_value(breakdown.iloc[selected_index]["Type"])
-
-                if selected_type == "M":
-                    insert_at = selected_index + 1
-                    new_row = make_new_breakdown_row("M", 2)
-                elif selected_type in ["S", "O"]:
-                    insert_at = len(breakdown)
-                    new_row = make_new_breakdown_row("S", 1)
-                else:
-                    insert_at = len(breakdown)
-                    new_row = make_new_breakdown_row("M", 2)
-            else:
-                insert_at = len(breakdown)
-                new_row = make_new_breakdown_row("M", 2)
-
-            new_row_df = pd.DataFrame([new_row])
+            insert_at = selected_indexes[0] + 1 if selected_indexes else len(breakdown)
+            new_row = pd.DataFrame([make_new_breakdown_row()])
             breakdown = pd.concat(
-                [breakdown.iloc[:insert_at], new_row_df, breakdown.iloc[insert_at:]],
+                [breakdown.iloc[:insert_at], new_row, breakdown.iloc[insert_at:]],
                 ignore_index=True,
             )
             set_breakdown(selected_article, breakdown)
