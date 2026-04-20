@@ -8,7 +8,6 @@ import streamlit as st
 st.set_page_config(page_title="BOQ Breakdown Calculator", layout="wide")
 
 BOQ_COLUMNS = [
-    "Open",
     "Article_ID",
     "Description",
     "Quantity",
@@ -18,7 +17,7 @@ BOQ_COLUMNS = [
     "Template_Name",
 ]
 
-BOQ_STORAGE_COLUMNS = [column for column in BOQ_COLUMNS if column != "Open"]
+BOQ_STORAGE_COLUMNS = BOQ_COLUMNS.copy()
 
 BREAKDOWN_COLUMNS = [
     "Type",
@@ -359,7 +358,9 @@ def calculate_article(article_row: pd.Series, breakdown_df: pd.DataFrame):
     t_mask = work["Type"].astype(str).str.upper() == "T"
     article_total = float(pd.to_numeric(work["Total Cost"], errors="coerce").fillna(0.0).sum())
     if t_mask.any():
-        article_total = float(pd.to_numeric(work.loc[t_mask, "Total Cost"], errors="coerce").fillna(0.0).iloc[-1])
+        article_total = float(
+            pd.to_numeric(work.loc[t_mask, "Total Cost"], errors="coerce").fillna(0.0).iloc[-1]
+        )
     unit_rate = article_total / boq_qty if boq_qty else 0.0
     return work, unit_rate, article_total, errors
 
@@ -403,16 +404,6 @@ def fmt_money(value):
     if value is None or pd.isna(value):
         return ""
     return f"{float(value):,.2f}"
-
-
-def boq_grid_df() -> pd.DataFrame:
-    work = st.session_state.boq_df.copy()
-    work.insert(0, "Open", "")
-    if st.session_state.selected_article:
-        mask = work["Article_ID"].astype(str) == str(st.session_state.selected_article)
-        if mask.any():
-            work.loc[mask, "Open"] = "+"
-    return work[BOQ_COLUMNS]
 
 
 def article_summary(article_id: str):
@@ -484,7 +475,7 @@ st.markdown("<div class='excel-shell'>", unsafe_allow_html=True)
 st.markdown("<div class='toolbar'>", unsafe_allow_html=True)
 st.markdown("<div class='sheet-title'>BOQ Breakdown Calculator</div>", unsafe_allow_html=True)
 st.markdown(
-    "<div class='sheet-subtitle'>Excel-style BOQ table with import, export, edit, save, and article breakdown opening from the + column.</div>",
+    "<div class='sheet-subtitle'>Click an Article_ID like A001 to open that article's own breakdown sheet.</div>",
     unsafe_allow_html=True,
 )
 
@@ -570,35 +561,68 @@ top_info_cols[1].metric("Articles", len(st.session_state.boq_df))
 filled_prices = pd.to_numeric(st.session_state.boq_df["Unit Price"], errors="coerce").notna().sum()
 top_info_cols[2].metric("Priced Articles", int(filled_prices))
 top_info_cols[3].markdown(
-    f"<div class='small-note'>Edit mode: <b>{'ON' if st.session_state.edit_mode else 'OFF'}</b>. Type <b>+</b> in one Open cell to open that article's own breakdown sheet.</div>",
+    f"<div class='small-note'>Edit mode: <b>{'ON' if st.session_state.edit_mode else 'OFF'}</b>. Click an <b>Article_ID</b> such as <b>A001</b> to open that article's own breakdown sheet.</div>",
     unsafe_allow_html=True,
 )
 
-sheet_df = boq_grid_df()
-edited_boq = st.data_editor(
-    sheet_df,
-    num_rows="dynamic" if st.session_state.edit_mode else "fixed",
-    use_container_width=True,
-    hide_index=True,
-    key="boq_sheet",
-    disabled=not st.session_state.edit_mode,
-    column_config={
-        "Open": st.column_config.TextColumn("Open", help="Type + in one row to open that article breakdown."),
-        "Quantity": st.column_config.NumberColumn("Quantity", format="%.3f"),
-        "Unit Price": st.column_config.NumberColumn("Unit Price", format="%.2f", disabled=True),
-        "Total Price": st.column_config.NumberColumn("Total Price", format="%.2f", disabled=True),
-        "Template_Name": st.column_config.SelectboxColumn(
+template_options = sorted(st.session_state.library_df["Template_Name"].dropna().astype(str).unique().tolist())
+header_cols = st.columns([1.2, 3.2, 1.2, 1.0, 1.4, 1.4, 1.8])
+header_cols[0].markdown("**Article_ID**")
+header_cols[1].markdown("**Description**")
+header_cols[2].markdown("**Quantity**")
+header_cols[3].markdown("**Unit**")
+header_cols[4].markdown("**Unit Price**")
+header_cols[5].markdown("**Total Price**")
+header_cols[6].markdown("**Template_Name**")
+
+boq_df = st.session_state.boq_df.copy()
+for idx in boq_df.index:
+    row = boq_df.loc[idx]
+    cols = st.columns([1.2, 3.2, 1.2, 1.0, 1.4, 1.4, 1.8])
+
+    article_label = str(row["Article_ID"]) if pd.notna(row["Article_ID"]) else f"Row {idx + 1}"
+    if cols[0].button(article_label, key=f"article_open_{idx}", use_container_width=True):
+        st.session_state.selected_article = article_label
+        st.rerun()
+
+    if st.session_state.edit_mode:
+        boq_df.at[idx, "Description"] = cols[1].text_input(
+            "Description",
+            value=str(row["Description"]) if pd.notna(row["Description"]) else "",
+            key=f"description_{idx}",
+            label_visibility="collapsed",
+        )
+        boq_df.at[idx, "Quantity"] = cols[2].number_input(
+            "Quantity",
+            value=float(pd.to_numeric(row["Quantity"], errors="coerce") or 0.0),
+            key=f"quantity_{idx}",
+            label_visibility="collapsed",
+        )
+        boq_df.at[idx, "Unit"] = cols[3].text_input(
+            "Unit",
+            value=str(row["Unit"]) if pd.notna(row["Unit"]) else "",
+            key=f"unit_{idx}",
+            label_visibility="collapsed",
+        )
+        cols[4].write(fmt_money(row["Unit Price"]))
+        cols[5].write(fmt_money(row["Total Price"]))
+        current_template = str(row["Template_Name"]) if pd.notna(row["Template_Name"]) else ""
+        boq_df.at[idx, "Template_Name"] = cols[6].selectbox(
             "Template_Name",
-            options=sorted(st.session_state.library_df["Template_Name"].dropna().astype(str).unique().tolist()),
-        ),
-    },
-)
+            options=[""] + template_options,
+            index=([""] + template_options).index(current_template) if current_template in template_options else 0,
+            key=f"template_{idx}",
+            label_visibility="collapsed",
+        )
+    else:
+        cols[1].write(str(row["Description"]) if pd.notna(row["Description"]) else "")
+        cols[2].write(f"{float(pd.to_numeric(row['Quantity'], errors='coerce') or 0.0):.3f}")
+        cols[3].write(str(row["Unit"]) if pd.notna(row["Unit"]) else "")
+        cols[4].write(fmt_money(row["Unit Price"]))
+        cols[5].write(fmt_money(row["Total Price"]))
+        cols[6].write(str(row["Template_Name"]) if pd.notna(row["Template_Name"]) else "")
 
-open_rows = edited_boq[edited_boq["Open"].astype(str).str.strip() == "+"]
-if not open_rows.empty:
-    st.session_state.selected_article = str(open_rows.iloc[0]["Article_ID"])
-
-st.session_state.boq_df = edited_boq[BOQ_STORAGE_COLUMNS].copy()
+st.session_state.boq_df = boq_df.copy()
 
 selected_article = st.session_state.selected_article
 if selected_article:
