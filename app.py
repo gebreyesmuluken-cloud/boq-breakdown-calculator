@@ -14,7 +14,6 @@ BOQ_COLUMNS = [
     "Unit",
     "Unit Price",
     "Total Price",
-    "Template_Name",
 ]
 
 BREAKDOWN_COLUMNS = [
@@ -42,7 +41,6 @@ DEFAULT_BOQ = pd.DataFrame(
             "Unit": "m3",
             "Unit Price": None,
             "Total Price": None,
-            "Template_Name": "FOUNDATION_FOOTING",
         },
         {
             "Article_ID": "A002",
@@ -51,175 +49,166 @@ DEFAULT_BOQ = pd.DataFrame(
             "Unit": "m3",
             "Unit Price": None,
             "Total Price": None,
-            "Template_Name": "FOUNDATION_FOOTING",
         },
     ]
 )[BOQ_COLUMNS]
 
-DEFAULT_LIBRARY = pd.DataFrame(
-    [
-        {
-            "Template_Name": "FOUNDATION_FOOTING",
-            "Select": False,
-            "Type": "O",
-            "Level": 0,
-            "Category": "Main",
-            "Code": "O-001",
-            "Description": "FOUNDATION FOOTING",
-            "Norm": "C",
-            "Formula": "1",
-            "Resultant": None,
-            "Quantity": None,
-            "Unit": "m3",
-            "Unit Price": None,
-            "Total Cost": None,
-        },
-        {
-            "Template_Name": "FOUNDATION_FOOTING",
-            "Select": False,
-            "Type": "S",
-            "Level": 1,
-            "Category": "Concrete",
-            "Code": "S-001",
-            "Description": "Concrete works",
-            "Norm": "N",
-            "Formula": "1",
-            "Resultant": None,
-            "Quantity": None,
-            "Unit": "m3",
-            "Unit Price": None,
-            "Total Cost": None,
-        },
-        {
-            "Template_Name": "FOUNDATION_FOOTING",
-            "Select": False,
-            "Type": "M",
-            "Level": 2,
-            "Category": "Concrete",
-            "Code": "0126120109",
-            "Description": "Supply concrete C30/37",
-            "Norm": "N",
-            "Formula": "1.05",
-            "Resultant": None,
-            "Quantity": None,
-            "Unit": "m3",
-            "Unit Price": 132.50,
-            "Total Cost": None,
-        },
-        {
-            "Template_Name": "FOUNDATION_FOOTING",
-            "Select": False,
-            "Type": "M",
-            "Level": 2,
-            "Category": "Concrete",
-            "Code": "0490000411",
-            "Description": "Concrete labor",
-            "Norm": "C",
-            "Formula": "30/60",
-            "Resultant": None,
-            "Quantity": None,
-            "Unit": "hr",
-            "Unit Price": 45.00,
-            "Total Cost": None,
-        },
-        {
-            "Template_Name": "FOUNDATION_FOOTING",
-            "Select": False,
-            "Type": "S",
-            "Level": 1,
-            "Category": "Pump",
-            "Code": "S-002",
-            "Description": "Pump works",
-            "Norm": "N",
-            "Formula": "1.05",
-            "Resultant": None,
-            "Quantity": None,
-            "Unit": "m3",
-            "Unit Price": None,
-            "Total Cost": None,
-        },
-        {
-            "Template_Name": "FOUNDATION_FOOTING",
-            "Select": False,
-            "Type": "M",
-            "Level": 2,
-            "Category": "Pump",
-            "Code": "0126120308",
-            "Description": "Concrete pumping 36m",
-            "Norm": "N",
-            "Formula": "1.05",
-            "Resultant": None,
-            "Quantity": None,
-            "Unit": "m3",
-            "Unit Price": 6.50,
-            "Total Cost": None,
-        },
-        {
-            "Template_Name": "FOUNDATION_FOOTING",
-            "Select": False,
-            "Type": "S",
-            "Level": 1,
-            "Category": "Steel",
-            "Code": "S-003",
-            "Description": "Reinforcement works",
-            "Norm": "N",
-            "Formula": "80",
-            "Resultant": None,
-            "Quantity": None,
-            "Unit": "kg",
-            "Unit Price": None,
-            "Total Cost": None,
-        },
-        {
-            "Template_Name": "FOUNDATION_FOOTING",
-            "Select": False,
-            "Type": "M",
-            "Level": 2,
-            "Category": "Steel",
-            "Code": "0126111101",
-            "Description": "Reinforcement bars",
-            "Norm": "N",
-            "Formula": "1",
-            "Resultant": None,
-            "Quantity": None,
-            "Unit": "kg",
-            "Unit Price": 0.90,
-            "Total Cost": None,
-        },
-        {
-            "Template_Name": "FOUNDATION_FOOTING",
-            "Select": False,
-            "Type": "S",
-            "Level": 1,
-            "Category": "Formwork",
-            "Code": "S-004",
-            "Description": "Formwork works",
-            "Norm": "N",
-            "Formula": "6.67",
-            "Resultant": None,
-            "Quantity": None,
-            "Unit": "m2",
-            "Unit Price": None,
-            "Total Cost": None,
-        },
-        {
-            "Template_Name": "FOUNDATION_FOOTING",
-            "Select": False,
-            "Type": "M",
-            "Level": 2,
-            "Category": "Formwork",
-            "Code": "0126131003",
-            "Description": "Formwork footing",
-            "Norm": "N",
-            "Formula": "1.05",
-            "Resultant": None,
-            "Quantity": None,
-            "Unit": "m2",
-            "Unit Price": 15.00,
-            "Total Cost": None,
-        },
-    ]
-)
+DEFAULT_BREAKDOWNS = {
+    "A001": pd.DataFrame(
+        [
+            {
+                "Select": False,
+                "Type": "O",
+                "Level": 0,
+                "Category": "Main",
+                "Code": "O-001",
+                "Description": "FOUNDATION FOOTING",
+                "Norm": "C",
+                "Formula": "1",
+                "Resultant": None,
+                "Quantity": None,
+                "Unit": "m3",
+                "Unit Price": None,
+                "Total Cost": None,
+            },
+            {
+                "Select": False,
+                "Type": "S",
+                "Level": 1,
+                "Category": "Concrete",
+                "Code": "S-001",
+                "Description": "Concrete works",
+                "Norm": "N",
+                "Formula": "1",
+                "Resultant": None,
+                "Quantity": None,
+                "Unit": "m3",
+                "Unit Price": None,
+                "Total Cost": None,
+            },
+            {
+                "Select": False,
+                "Type": "M",
+                "Level": 2,
+                "Category": "Concrete",
+                "Code": "0126120109",
+                "Description": "Supply concrete C30/37",
+                "Norm": "N",
+                "Formula": "1.05",
+                "Resultant": None,
+                "Quantity": None,
+                "Unit": "m3",
+                "Unit Price": 132.50,
+                "Total Cost": None,
+            },
+            {
+                "Select": False,
+                "Type": "M",
+                "Level": 2,
+                "Category": "Concrete",
+                "Code": "0490000411",
+                "Description": "Concrete labor",
+                "Norm": "C",
+                "Formula": "30/60",
+                "Resultant": None,
+                "Quantity": None,
+                "Unit": "hr",
+                "Unit Price": 45.00,
+                "Total Cost": None,
+            },
+            {
+                "Select": False,
+                "Type": "S",
+                "Level": 1,
+                "Category": "Pump",
+                "Code": "S-002",
+                "Description": "Pump works",
+                "Norm": "N",
+                "Formula": "1.05",
+                "Resultant": None,
+                "Quantity": None,
+                "Unit": "m3",
+                "Unit Price": None,
+                "Total Cost": None,
+            },
+            {
+                "Select": False,
+                "Type": "M",
+                "Level": 2,
+                "Category": "Pump",
+                "Code": "0126120308",
+                "Description": "Concrete pumping 36m",
+                "Norm": "N",
+                "Formula": "1.05",
+                "Resultant": None,
+                "Quantity": None,
+                "Unit": "m3",
+                "Unit Price": 6.50,
+                "Total Cost": None,
+            },
+            {
+                "Select": False,
+                "Type": "S",
+                "Level": 1,
+                "Category": "Steel",
+                "Code": "S-003",
+                "Description": "Reinforcement works",
+                "Norm": "N",
+                "Formula": "80",
+                "Resultant": None,
+                "Quantity": None,
+                "Unit": "kg",
+                "Unit Price": None,
+                "Total Cost": None,
+            },
+            {
+                "Select": False,
+                "Type": "M",
+                "Level": 2,
+                "Category": "Steel",
+                "Code": "0126111101",
+                "Description": "Reinforcement bars",
+                "Norm": "N",
+                "Formula": "1",
+                "Resultant": None,
+                "Quantity": None,
+                "Unit": "kg",
+                "Unit Price": 0.90,
+                "Total Cost": None,
+            },
+            {
+                "Select": False,
+                "Type": "S",
+                "Level": 1,
+                "Category": "Formwork",
+                "Code": "S-004",
+                "Description": "Formwork works",
+                "Norm": "N",
+                "Formula": "6.67",
+                "Resultant": None,
+                "Quantity": None,
+                "Unit": "m2",
+                "Unit Price": None,
+                "Total Cost": None,
+            },
+            {
+                "Select": False,
+                "Type": "M",
+                "Level": 2,
+                "Category": "Formwork",
+                "Code": "0126131003",
+                "Description": "Formwork footing",
+                "Norm": "N",
+                "Formula": "1.05",
+                "Resultant": None,
+                "Quantity": None,
+                "Unit": "m2",
+                "Unit Price": 15.00,
+                "Total Cost": None,
+            },
+        ]
+    )
+}
 
 SAFE_GLOBALS = {
     "__builtins__": {},
@@ -244,16 +233,18 @@ def normalize_norm_value(value) -> str:
 def init_state():
     if "boq_df" not in st.session_state:
         st.session_state.boq_df = DEFAULT_BOQ.copy()
-    if "library_df" not in st.session_state:
-        st.session_state.library_df = DEFAULT_LIBRARY.copy()
     if "breakdowns" not in st.session_state:
-        st.session_state.breakdowns = {}
+        st.session_state.breakdowns = {
+            article_id: df.copy() for article_id, df in DEFAULT_BREAKDOWNS.items()
+        }
     if "selected_article" not in st.session_state:
         st.session_state.selected_article = None
     if "edit_mode" not in st.session_state:
         st.session_state.edit_mode = True
     if "save_message" not in st.session_state:
         st.session_state.save_message = ""
+    if "breakdown_save_message" not in st.session_state:
+        st.session_state.breakdown_save_message = ""
 
 
 def empty_breakdown_df():
@@ -270,7 +261,6 @@ def normalize_boq_columns(df: pd.DataFrame) -> pd.DataFrame:
         "unit_price": "Unit Price",
         "total price": "Total Price",
         "total_price": "Total Price",
-        "template_name": "Template_Name",
     }
     work = df.copy()
     work.columns = [rename_map.get(str(c).strip().lower(), c) for c in work.columns]
@@ -283,8 +273,6 @@ def normalize_boq_columns(df: pd.DataFrame) -> pd.DataFrame:
         work["Unit Price"] = None
     if "Total Price" not in work.columns:
         work["Total Price"] = None
-    if "Template_Name" not in work.columns:
-        work["Template_Name"] = ""
 
     return work[BOQ_COLUMNS].copy()
 
@@ -312,6 +300,7 @@ def set_breakdown(article_id: str, df: pd.DataFrame):
         "Unit Price": 0.0,
         "Total Cost": None,
     }
+
     for column in BREAKDOWN_COLUMNS:
         if column not in work.columns:
             work[column] = defaults[column]
@@ -324,20 +313,10 @@ def set_breakdown(article_id: str, df: pd.DataFrame):
     st.session_state.breakdowns[article_id] = work[BREAKDOWN_COLUMNS].copy()
 
 
-def load_template(article_id: str, template_name: str):
-    rows = st.session_state.library_df[
-        st.session_state.library_df["Template_Name"].astype(str) == str(template_name)
-    ].copy()
-    if rows.empty:
-        st.warning(f"Template '{template_name}' was not found.")
-        return
-    rows["Select"] = False
-    set_breakdown(article_id, rows[BREAKDOWN_COLUMNS].copy())
-
-
-def ensure_article_breakdown(article_id: str, template_name: str):
-    if get_breakdown(article_id).empty and str(template_name).strip():
-        load_template(article_id, template_name)
+def ensure_article_breakdown(article_id: str):
+    if article_id not in st.session_state.breakdowns:
+        default_df = DEFAULT_BREAKDOWNS.get(article_id, empty_breakdown_df())
+        st.session_state.breakdowns[article_id] = default_df.copy()
 
 
 def eval_formula(formula_text: str) -> float:
@@ -514,15 +493,6 @@ def delete_selected_breakdown_rows(article_id: str):
     return True
 
 
-def breakdown_editor_df(article_id: str) -> pd.DataFrame:
-    df = get_breakdown(article_id).copy()
-    if df.empty:
-        return df
-    df["Type"] = df["Type"].apply(normalize_type_value)
-    df["Norm"] = df["Norm"].apply(normalize_norm_value)
-    return df
-
-
 def color_badge_html():
     return """
     <div style="margin:8px 0 12px 0;">
@@ -574,6 +544,18 @@ st.markdown(
         padding: 10px 12px;
         margin-bottom: 10px;
     }
+    .boq-box {
+        background: #eef2f7;
+        border-radius: 10px;
+        padding: 10px 12px;
+        min-height: 20px;
+        display: flex;
+        align-items: center;
+    }
+    .boq-box.right {
+        justify-content: flex-end;
+        font-variant-numeric: tabular-nums;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -583,13 +565,24 @@ st.markdown("<div class='excel-shell'>", unsafe_allow_html=True)
 st.markdown("<div class='toolbar'>", unsafe_allow_html=True)
 st.markdown("<div class='sheet-title'>BOQ Breakdown Calculator</div>", unsafe_allow_html=True)
 st.markdown(
-    "<div class='sheet-subtitle'>Click an Article_ID like A001 to open its own breakdown. Resultant, Quantity, and Total Cost update after calculation.</div>",
+    "<div class='sheet-subtitle'>Click an Article_ID like A002 to open that article's own blank manual breakdown table.</div>",
     unsafe_allow_html=True,
 )
 
-toolbar_cols = st.columns([1.3, 1.3, 1.0, 1.0, 1.4, 3.5])
-boq_file = toolbar_cols[0].file_uploader("Import BOQ", type=["xlsx"], label_visibility="collapsed", key="boq_upload")
-lib_file = toolbar_cols[1].file_uploader("Import Library", type=["xlsx"], label_visibility="collapsed", key="lib_upload")
+toolbar_cols = st.columns([1.5, 1.5, 1.0, 1.0, 1.4, 1.4])
+boq_file = toolbar_cols[0].file_uploader("Import Excel", type=["xlsx"], key="boq_upload")
+
+try:
+    export_data = export_excel()
+    toolbar_cols[1].download_button(
+        "Export Excel",
+        data=export_data,
+        file_name="boq_breakdown_result.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+except Exception:
+    toolbar_cols[1].button("Export Excel", disabled=True, use_container_width=True)
 
 if toolbar_cols[2].button("Save", use_container_width=True):
     st.session_state.save_message = f"Draft saved in session at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -598,34 +591,30 @@ if toolbar_cols[3].button("Edit On" if st.session_state.edit_mode else "Edit Off
     st.session_state.edit_mode = not st.session_state.edit_mode
 
 run_clicked = toolbar_cols[4].button("Run Calculation", type="primary", use_container_width=True)
-
-try:
-    export_data = export_excel()
-    toolbar_cols[5].download_button(
-        "Export Excel",
-        data=export_data,
-        file_name="boq_breakdown_result.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-    )
-except Exception:
-    toolbar_cols[5].button("Export Excel", disabled=True, use_container_width=True)
+load_sample_clicked = toolbar_cols[5].button("Load Sample", use_container_width=True)
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-if boq_file is not None or lib_file is not None:
+if boq_file is not None:
     load_cols = st.columns([1.2, 5])
     if load_cols[0].button("Load Imported Files", use_container_width=True):
         try:
-            if boq_file is not None:
-                st.session_state.boq_df = normalize_boq_columns(pd.read_excel(boq_file))
-                st.session_state.breakdowns = {}
-                st.session_state.selected_article = None
-            if lib_file is not None:
-                _ = lib_file.read()
+            st.session_state.boq_df = normalize_boq_columns(pd.read_excel(boq_file))
+            st.session_state.breakdowns = {
+                article_id: df.copy() for article_id, df in DEFAULT_BREAKDOWNS.items()
+            }
+            st.session_state.selected_article = None
             st.success("Imported files loaded.")
         except Exception as exc:
             st.error(str(exc))
+
+if load_sample_clicked:
+    st.session_state.boq_df = DEFAULT_BOQ.copy()
+    st.session_state.breakdowns = {
+        article_id: df.copy() for article_id, df in DEFAULT_BREAKDOWNS.items()
+    }
+    st.session_state.selected_article = None
+    st.success("Sample data loaded.")
 
 if run_clicked:
     errors = run_all()
@@ -640,25 +629,24 @@ if st.session_state.save_message:
     st.info(st.session_state.save_message)
 
 st.markdown("<div style='padding: 16px;'>", unsafe_allow_html=True)
-header_cols = st.columns([1.2, 3.2, 1.2, 1.0, 1.4, 1.4, 1.8])
+header_cols = st.columns([1.2, 3.6, 1.2, 1.0, 1.5, 1.5])
 header_cols[0].markdown("**Article_ID**")
 header_cols[1].markdown("**Description**")
 header_cols[2].markdown("**Quantity**")
 header_cols[3].markdown("**Unit**")
 header_cols[4].markdown("**Unit Price**")
 header_cols[5].markdown("**Total Price**")
-header_cols[6].markdown("**Template_Name**")
 
-template_options = sorted(DEFAULT_LIBRARY["Template_Name"].dropna().astype(str).unique().tolist())
 boq_df = st.session_state.boq_df.copy()
 
 for idx in boq_df.index:
     row = boq_df.loc[idx]
-    cols = st.columns([1.2, 3.2, 1.2, 1.0, 1.4, 1.4, 1.8])
+    cols = st.columns([1.2, 3.6, 1.2, 1.0, 1.5, 1.5])
 
     article_label = str(row["Article_ID"]) if pd.notna(row["Article_ID"]) else f"Row {idx + 1}"
     if cols[0].button(article_label, key=f"open_article_{idx}", use_container_width=True):
         st.session_state.selected_article = article_label
+        st.session_state.breakdown_save_message = ""
         st.rerun()
 
     if st.session_state.edit_mode:
@@ -680,23 +668,26 @@ for idx in boq_df.index:
             key=f"unit_{idx}",
             label_visibility="collapsed",
         )
-        cols[4].write(fmt_money(row["Unit Price"]))
-        cols[5].write(fmt_money(row["Total Price"]))
-        current_template = str(row["Template_Name"]) if pd.notna(row["Template_Name"]) else ""
-        boq_df.at[idx, "Template_Name"] = cols[6].selectbox(
-            "Template_Name",
-            options=[""] + template_options,
-            index=([""] + template_options).index(current_template) if current_template in template_options else 0,
-            key=f"template_{idx}",
-            label_visibility="collapsed",
+        cols[4].markdown(
+            f"<div class='boq-box right'>{fmt_money(row['Unit Price'])}</div>",
+            unsafe_allow_html=True,
+        )
+        cols[5].markdown(
+            f"<div class='boq-box right'>{fmt_money(row['Total Price'])}</div>",
+            unsafe_allow_html=True,
         )
     else:
         cols[1].write(str(row["Description"]) if pd.notna(row["Description"]) else "")
         cols[2].write(f"{float(pd.to_numeric(row['Quantity'], errors='coerce') or 0.0):.3f}")
         cols[3].write(str(row["Unit"]) if pd.notna(row["Unit"]) else "")
-        cols[4].write(fmt_money(row["Unit Price"]))
-        cols[5].write(fmt_money(row["Total Price"]))
-        cols[6].write(str(row["Template_Name"]) if pd.notna(row["Template_Name"]) else "")
+        cols[4].markdown(
+            f"<div class='boq-box right'>{fmt_money(row['Unit Price'])}</div>",
+            unsafe_allow_html=True,
+        )
+        cols[5].markdown(
+            f"<div class='boq-box right'>{fmt_money(row['Total Price'])}</div>",
+            unsafe_allow_html=True,
+        )
 
 st.session_state.boq_df = boq_df[BOQ_COLUMNS].copy()
 
@@ -707,7 +698,7 @@ if selected_article:
     ]
     if not article_row.empty:
         article = article_row.iloc[0]
-        ensure_article_breakdown(selected_article, article["Template_Name"])
+        ensure_article_breakdown(selected_article)
 
         st.markdown("<div class='panel'>", unsafe_allow_html=True)
         st.markdown(
@@ -718,24 +709,16 @@ if selected_article:
         )
         st.markdown(color_badge_html(), unsafe_allow_html=True)
 
-        top_cols = st.columns([1.0, 1.0, 1.3, 1.0, 1.0])
+        top_cols = st.columns([1.0, 1.0, 1.2, 1.2, 1.0])
         add_clicked = top_cols[0].button("Add Row", use_container_width=True)
         delete_clicked = top_cols[1].button("Delete Selected", use_container_width=True)
-        reload_clicked = top_cols[2].button("Reload Template", use_container_width=True)
+        save_breakdown_clicked = top_cols[2].button("Save Breakdown", use_container_width=True)
         calc_clicked = top_cols[3].button("Calculate This Article", use_container_width=True)
         close_clicked = top_cols[4].button("Close", use_container_width=True)
 
-        if reload_clicked:
-            if str(article["Template_Name"]).strip():
-                load_template(selected_article, article["Template_Name"])
-                st.success(f"Template reloaded for {selected_article}.")
-                st.rerun()
-            else:
-                st.warning("Select a template first.")
-
         if add_clicked:
             breakdown = get_breakdown(selected_article)
-            selected_rows = breakdown[breakdown["Select"].fillna(False)]
+            selected_rows = breakdown[breakdown["Select"].fillna(False)] if not breakdown.empty else pd.DataFrame()
             if not selected_rows.empty:
                 selected_index = selected_rows.index[0]
                 selected_type = normalize_type_value(selected_rows.iloc[0]["Type"])
@@ -766,9 +749,7 @@ if selected_article:
             else:
                 st.warning("Select at least one row to delete.")
 
-        preview_df, preview_unit_price, preview_total_price, preview_errors = calculate_article(
-            article, get_breakdown(selected_article)
-        )
+        preview_df, _, _, _ = calculate_article(article, get_breakdown(selected_article))
 
         edited_breakdown = st.data_editor(
             preview_df,
@@ -793,9 +774,16 @@ if selected_article:
                 "Total Cost": st.column_config.NumberColumn("Total Cost", format="%.2f", disabled=True),
             },
         )
-        set_breakdown(selected_article, edited_breakdown)
+
+        if save_breakdown_clicked:
+            set_breakdown(selected_article, edited_breakdown)
+            st.session_state.breakdown_save_message = (
+                f"Breakdown for {selected_article} saved at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            st.rerun()
 
         if calc_clicked:
+            set_breakdown(selected_article, edited_breakdown)
             result_df, unit_price, total_price, errors = calculate_article(article, get_breakdown(selected_article))
             set_breakdown(selected_article, result_df)
             row_index = article_row.index[0]
@@ -809,8 +797,12 @@ if selected_article:
                 st.success("Selected article calculated.")
             st.rerun()
 
+        if st.session_state.breakdown_save_message:
+            st.info(st.session_state.breakdown_save_message)
+
         if close_clicked:
             st.session_state.selected_article = None
+            st.session_state.breakdown_save_message = ""
             st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
