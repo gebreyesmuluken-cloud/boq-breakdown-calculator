@@ -596,55 +596,58 @@ with st.sidebar:
     if st.session_state.save_message:
         st.info(st.session_state.save_message)
 
-boq_tab, library_tab, breakdown_tab = st.tabs(["BOQ", "Library", "Breakdown"])
+boq_tab, library_tab = st.tabs(["BOQ", "Library"])
 
 with boq_tab:
     st.subheader("Bill of Quantities")
-    edited_boq = st.data_editor(
-        st.session_state.boq_df,
-        num_rows="dynamic",
+    st.caption("Click a BOQ row like A001 to open that article's breakdown panel below.")
+    boq_df = st.session_state.boq_df.copy()
+    selection_event = st.dataframe(
+        boq_df,
         use_container_width=True,
-        key="boq_editor",
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="boq_selector",
     )
-    st.session_state.boq_df = normalize_boq_columns(edited_boq)
 
-with library_tab:
-    st.subheader("Template Library")
-    edited_library = st.data_editor(
-        st.session_state.library_df,
-        num_rows="dynamic",
-        use_container_width=True,
-        key="library_editor",
-    )
-    st.session_state.library_df = normalize_library_columns(edited_library)
+    selected_rows = selection_event.selection.get("rows", []) if selection_event else []
+    if selected_rows:
+        selected_index = selected_rows[0]
+        st.session_state.selected_article = str(boq_df.iloc[selected_index]["Article_ID"])
+    elif boq_df["Article_ID"].astype(str).tolist() and st.session_state.selected_article not in boq_df["Article_ID"].astype(str).tolist():
+        st.session_state.selected_article = str(boq_df.iloc[0]["Article_ID"])
 
-with breakdown_tab:
-    st.subheader("Article Breakdown")
+    with st.expander("Edit BOQ Table", expanded=False):
+        edited_boq = st.data_editor(
+            st.session_state.boq_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="boq_editor",
+        )
+        st.session_state.boq_df = normalize_boq_columns(edited_boq)
+
+    st.divider()
+    st.subheader("Breakdown Calculation")
     boq_df = st.session_state.boq_df
     article_options = boq_df["Article_ID"].astype(str).tolist()
 
     if article_options:
-        default_index = 0
-        if st.session_state.selected_article in article_options:
-            default_index = article_options.index(st.session_state.selected_article)
+        if st.session_state.selected_article not in article_options:
+            st.session_state.selected_article = article_options[0]
 
-        selected_article = st.selectbox(
-            "Select article",
-            options=article_options,
-            index=default_index,
-        )
-        st.session_state.selected_article = selected_article
-
+        selected_article = st.session_state.selected_article
         selected_row = boq_df[boq_df["Article_ID"].astype(str) == selected_article].iloc[0]
         template_name = str(selected_row.get("Template_Name", "")).strip()
+        ensure_article_breakdown(selected_article, template_name)
 
-        col1, col2 = st.columns([1, 1])
-        with col1:
+        info_col, action_col = st.columns([3, 1])
+        with info_col:
+            st.markdown(f"### {selected_article}")
             st.write(f"Description: {selected_row['Description']}")
             st.write(f"Quantity: {selected_row['Quantity']} {selected_row['Unit']}")
-        with col2:
-            if st.button("Load Template for Article", use_container_width=True):
-                load_template(selected_article, template_name)
+            st.caption("Each article has its own separate breakdown calculation.")
+        with action_col:
             if st.button("Calculate This Article", use_container_width=True):
                 breakdown = get_breakdown(selected_article)
                 calculated, unit_price, total_price, calc_errors = calculate_article(
@@ -659,9 +662,8 @@ with breakdown_tab:
                 if calc_errors:
                     st.warning("\n".join(calc_errors))
                 else:
-                    st.success("Article breakdown calculated.")
+                    st.success(f"Breakdown calculated for {selected_article}.")
 
-        ensure_article_breakdown(selected_article, template_name)
         edited_breakdown = st.data_editor(
             get_breakdown(selected_article),
             num_rows="dynamic",
@@ -671,3 +673,13 @@ with breakdown_tab:
         set_breakdown(selected_article, edited_breakdown)
     else:
         st.info("Add at least one BOQ article to manage breakdowns.")
+
+with library_tab:
+    st.subheader("Template Library")
+    edited_library = st.data_editor(
+        st.session_state.library_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="library_editor",
+    )
+    st.session_state.library_df = normalize_library_columns(edited_library)
