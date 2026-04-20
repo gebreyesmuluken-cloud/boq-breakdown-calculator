@@ -18,6 +18,7 @@ BOQ_COLUMNS = [
 ]
 
 BREAKDOWN_COLUMNS = [
+    "Select",
     "Type",
     "Level",
     "Category",
@@ -59,6 +60,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
     [
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "O",
             "Level": 0,
             "Category": "Main",
@@ -74,12 +76,13 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "S",
             "Level": 1,
             "Category": "Concrete",
             "Code": "S-001",
             "Description": "Concrete works",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "1",
             "Resultant": None,
             "Quantity": None,
@@ -89,12 +92,13 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "M",
             "Level": 2,
             "Category": "Concrete",
             "Code": "0126120109",
             "Description": "Supply concrete C30/37",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "1.05",
             "Resultant": None,
             "Quantity": None,
@@ -104,6 +108,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "M",
             "Level": 2,
             "Category": "Concrete",
@@ -119,12 +124,13 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "S",
             "Level": 1,
             "Category": "Pump",
             "Code": "S-002",
             "Description": "Pump works",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "1.05",
             "Resultant": None,
             "Quantity": None,
@@ -134,12 +140,13 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "M",
             "Level": 2,
             "Category": "Pump",
             "Code": "0126120308",
             "Description": "Concrete pumping 36m",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "1.05",
             "Resultant": None,
             "Quantity": None,
@@ -149,12 +156,13 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "S",
             "Level": 1,
             "Category": "Steel",
             "Code": "S-003",
             "Description": "Reinforcement works",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "80",
             "Resultant": None,
             "Quantity": None,
@@ -164,12 +172,13 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "M",
             "Level": 2,
             "Category": "Steel",
             "Code": "0126111101",
             "Description": "Reinforcement bars",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "1",
             "Resultant": None,
             "Quantity": None,
@@ -179,12 +188,13 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "S",
             "Level": 1,
             "Category": "Formwork",
             "Code": "S-004",
             "Description": "Formwork works",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "6.67",
             "Resultant": None,
             "Quantity": None,
@@ -194,12 +204,13 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "M",
             "Level": 2,
             "Category": "Formwork",
             "Code": "0126131003",
             "Description": "Formwork footing",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "1.05",
             "Resultant": None,
             "Quantity": None,
@@ -223,14 +234,11 @@ SAFE_GLOBALS = {
 
 def normalize_type_value(value) -> str:
     value = str(value).strip().upper()
-    legacy = {"T": "O", "D": "M"}
-    return legacy.get(value, value)
+    return {"T": "O", "D": "M"}.get(value, value)
 
 
 def normalize_norm_value(value) -> str:
-    value = str(value).strip().upper()
-    legacy = {"N": "F"}
-    return legacy.get(value, value)
+    return str(value).strip().upper()
 
 
 def init_state():
@@ -284,6 +292,7 @@ def normalize_boq_columns(df: pd.DataFrame) -> pd.DataFrame:
 def normalize_library_columns(df: pd.DataFrame) -> pd.DataFrame:
     rename_map = {
         "template_name": "Template_Name",
+        "select": "Select",
         "type": "Type",
         "level": "Level",
         "category": "Category",
@@ -309,6 +318,7 @@ def normalize_library_columns(df: pd.DataFrame) -> pd.DataFrame:
             raise ValueError(f"Library file is missing required column: {column}")
 
     defaults = {
+        "Select": False,
         "Level": 0,
         "Resultant": None,
         "Quantity": None,
@@ -322,6 +332,7 @@ def normalize_library_columns(df: pd.DataFrame) -> pd.DataFrame:
     work["Type"] = work["Type"].apply(normalize_type_value)
     work["Norm"] = work["Norm"].apply(normalize_norm_value)
     work["Level"] = pd.to_numeric(work["Level"], errors="coerce").fillna(0).astype(int)
+    work["Select"] = work["Select"].fillna(False).astype(bool)
 
     return work[["Template_Name", *BREAKDOWN_COLUMNS]].copy()
 
@@ -335,12 +346,13 @@ def get_breakdown(article_id: str) -> pd.DataFrame:
 def set_breakdown(article_id: str, df: pd.DataFrame):
     work = df.copy()
     defaults = {
+        "Select": False,
         "Type": "M",
         "Level": 2,
         "Category": "",
         "Code": "",
         "Description": "",
-        "Norm": "F",
+        "Norm": "N",
         "Formula": "1",
         "Resultant": None,
         "Quantity": None,
@@ -355,6 +367,7 @@ def set_breakdown(article_id: str, df: pd.DataFrame):
     work["Type"] = work["Type"].apply(normalize_type_value)
     work["Norm"] = work["Norm"].apply(normalize_norm_value)
     work["Level"] = pd.to_numeric(work["Level"], errors="coerce").fillna(0).astype(int)
+    work["Select"] = work["Select"].fillna(False).astype(bool)
 
     st.session_state.breakdowns[article_id] = work[BREAKDOWN_COLUMNS].copy()
 
@@ -365,6 +378,7 @@ def load_template(article_id: str, template_name: str):
     if rows.empty:
         st.warning(f"Template '{template_name}' was not found.")
         return
+    rows["Select"] = False
     set_breakdown(article_id, rows[BREAKDOWN_COLUMNS].copy())
 
 
@@ -442,20 +456,20 @@ def calculate_article(article_row: pd.Series, breakdown_df: pd.DataFrame):
         if row_type == "O":
             quantity = boq_qty
         elif row_type == "S":
-            if norm == "F":
+            if norm == "N":
                 quantity = resultant * boq_qty
             elif norm == "C":
                 quantity = resultant
             else:
-                errors.append(f"{article_row['Article_ID']} - row {index + 1}: Norm must be F or C")
+                errors.append(f"{article_row['Article_ID']} - row {index + 1}: Norm must be N or C")
             current_subgroup_qty = quantity
         elif row_type == "M":
-            if norm == "F":
+            if norm == "N":
                 quantity = resultant * current_subgroup_qty
             elif norm == "C":
                 quantity = resultant
             else:
-                errors.append(f"{article_row['Article_ID']} - row {index + 1}: Norm must be F or C")
+                errors.append(f"{article_row['Article_ID']} - row {index + 1}: Norm must be N or C")
             total_cost = quantity * unit_price
         else:
             errors.append(f"{article_row['Article_ID']} - row {index + 1}: Type must be O, S, or M")
@@ -473,6 +487,7 @@ def calculate_article(article_row: pd.Series, breakdown_df: pd.DataFrame):
         article_total = float(pd.to_numeric(work.loc[o_mask, "Total Cost"], errors="coerce").fillna(0.0).iloc[-1])
     unit_rate = article_total / boq_qty if boq_qty else 0.0
 
+    work["Select"] = False
     return work, unit_rate, article_total, errors
 
 
@@ -499,13 +514,15 @@ def export_excel() -> bytes:
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         st.session_state.boq_df.to_excel(writer, sheet_name="BOQ", index=False)
-        st.session_state.library_df.to_excel(writer, sheet_name="Library", index=False)
+        st.session_state.library_df.drop(columns=["Select"], errors="ignore").to_excel(
+            writer, sheet_name="Library", index=False
+        )
         all_breakdowns = []
         for article_id, df in st.session_state.breakdowns.items():
             if not df.empty:
                 temp = df.copy()
                 temp.insert(0, "Article_ID", article_id)
-                all_breakdowns.append(temp)
+                all_breakdowns.append(temp.drop(columns=["Select"], errors="ignore"))
         if all_breakdowns:
             pd.concat(all_breakdowns, ignore_index=True).to_excel(writer, sheet_name="Breakdowns", index=False)
     return output.getvalue()
@@ -517,16 +534,36 @@ def fmt_money(value):
     return f"{float(value):,.2f}"
 
 
-def article_summary(article_id: str):
-    row = st.session_state.boq_df[st.session_state.boq_df["Article_ID"].astype(str) == str(article_id)]
-    if row.empty:
-        return 0.0, 0.0
-    quantity = row.iloc[0]["Quantity"]
-    total = row.iloc[0]["Total Price"]
-    total_value = float(pd.to_numeric(total, errors="coerce") or 0.0)
-    qty_value = float(pd.to_numeric(quantity, errors="coerce") or 0.0)
-    unit_rate = total_value / qty_value if qty_value else 0.0
-    return total_value, unit_rate
+def make_new_breakdown_row(row_type="M", level=2):
+    return {
+        "Select": False,
+        "Type": row_type,
+        "Level": level,
+        "Category": "",
+        "Code": "",
+        "Description": "",
+        "Norm": "N",
+        "Formula": "1",
+        "Resultant": None,
+        "Quantity": None,
+        "Unit": "",
+        "Unit Price": 0.0,
+        "Total Cost": None,
+    }
+
+
+def delete_selected_breakdown_rows(article_id: str):
+    breakdown = get_breakdown(article_id)
+    if breakdown.empty:
+        return False
+
+    selected = breakdown["Select"].fillna(False).astype(bool)
+    if not selected.any():
+        return False
+
+    breakdown = breakdown.loc[~selected].reset_index(drop=True)
+    set_breakdown(article_id, breakdown)
+    return True
 
 
 def style_breakdown(df: pd.DataFrame):
@@ -541,6 +578,7 @@ def style_breakdown(df: pd.DataFrame):
         return [""] * len(row)
 
     return df.style.apply(row_style, axis=1)
+
 
 init_state()
 
@@ -734,8 +772,22 @@ if selected_article:
             unsafe_allow_html=True,
         )
 
-        top_cols = st.columns([1.2, 1.2, 1.2])
-        if top_cols[0].button("Reload Template", use_container_width=True):
+        top_cols = st.columns([1.0, 1.0, 1.3, 1.0, 1.0])
+        if top_cols[0].button("Add Row", use_container_width=True):
+            breakdown = get_breakdown(selected_article)
+            new_row = pd.DataFrame([make_new_breakdown_row("M", 2)])
+            breakdown = pd.concat([breakdown, new_row], ignore_index=True)
+            set_breakdown(selected_article, breakdown)
+            st.rerun()
+
+        if top_cols[1].button("Delete Selected", use_container_width=True):
+            if delete_selected_breakdown_rows(selected_article):
+                st.success("Selected rows deleted.")
+                st.rerun()
+            else:
+                st.warning("Select at least one row to delete.")
+
+        if top_cols[2].button("Reload Template", use_container_width=True):
             if str(article["Template_Name"]).strip():
                 load_template(selected_article, article["Template_Name"])
                 st.success(f"Template reloaded for {selected_article}.")
@@ -743,7 +795,7 @@ if selected_article:
             else:
                 st.warning("Select a template first.")
 
-        if top_cols[1].button("Calculate This Article", use_container_width=True):
+        if top_cols[3].button("Calculate This Article", use_container_width=True):
             result_df, unit_price, total_price, errors = calculate_article(article, get_breakdown(selected_article))
             set_breakdown(selected_article, result_df)
             row_index = article_row.index[0]
@@ -757,15 +809,39 @@ if selected_article:
                 st.success("Selected article calculated.")
             st.rerun()
 
-        if top_cols[2].button("Close", use_container_width=True):
+        if top_cols[4].button("Close", use_container_width=True):
             st.session_state.selected_article = None
             st.rerun()
 
+        breakdown = get_breakdown(selected_article).copy()
+        breakdown["Type"] = breakdown["Type"].apply(normalize_type_value)
+        breakdown["Norm"] = breakdown["Norm"].apply(normalize_norm_value)
+
+        edited_breakdown = st.data_editor(
+            breakdown,
+            num_rows="dynamic" if st.session_state.edit_mode else "fixed",
+            use_container_width=True,
+            hide_index=True,
+            key=f"breakdown_editor_{selected_article}",
+            disabled=not st.session_state.edit_mode,
+            column_config={
+                "Select": st.column_config.CheckboxColumn("Select"),
+                "Type": st.column_config.SelectboxColumn("Type", options=["O", "S", "M"]),
+                "Level": st.column_config.NumberColumn("Level", format="%d"),
+                "Norm": st.column_config.SelectboxColumn("Norm", options=["N", "C"]),
+                "Resultant": st.column_config.NumberColumn("Resultant", format="%.3f", disabled=True),
+                "Quantity": st.column_config.NumberColumn("Quantity", format="%.3f", disabled=True),
+                "Unit Price": st.column_config.NumberColumn("Unit Price", format="%.4f"),
+                "Total Cost": st.column_config.NumberColumn("Total Cost", format="%.2f", disabled=True),
+            },
+        )
+        set_breakdown(selected_article, edited_breakdown)
+
+        st.markdown("**Colored Breakdown Panel**")
         preview = get_breakdown(selected_article).copy()
-        if not preview.empty:
-            preview["Type"] = preview["Type"].apply(normalize_type_value)
-            preview["Norm"] = preview["Norm"].apply(normalize_norm_value)
-            st.dataframe(style_breakdown(preview), use_container_width=True, hide_index=True)
+        preview["Type"] = preview["Type"].apply(normalize_type_value)
+        preview["Norm"] = preview["Norm"].apply(normalize_norm_value)
+        st.dataframe(style_breakdown(preview), use_container_width=True, hide_index=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -779,9 +855,10 @@ with library_expander:
         key="library_sheet",
         disabled=not st.session_state.edit_mode,
         column_config={
+            "Select": st.column_config.CheckboxColumn("Select"),
             "Type": st.column_config.SelectboxColumn("Type", options=["O", "S", "M"]),
             "Level": st.column_config.NumberColumn("Level", format="%d"),
-            "Norm": st.column_config.SelectboxColumn("Norm", options=["F", "C"]),
+            "Norm": st.column_config.SelectboxColumn("Norm", options=["N", "C"]),
             "Unit Price": st.column_config.NumberColumn("Unit Price", format="%.4f"),
             "Resultant": st.column_config.NumberColumn("Resultant", format="%.3f"),
             "Quantity": st.column_config.NumberColumn("Quantity", format="%.3f"),
