@@ -521,13 +521,18 @@ run_clicked = toolbar_cols[4].button("Run Calculation", type="primary", use_cont
 load_sample_clicked = toolbar_cols[5].button("Load Sample", use_container_width=True)
 add_row_clicked = toolbar_cols[6].button("Add Row", use_container_width=True)
 
-toolbar_cols[7].download_button(
-    "Export Excel",
-    data=export_excel(),
-    file_name="boq_breakdown_result.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    use_container_width=True,
-)
+try:
+    export_data = export_excel()
+    toolbar_cols[7].download_button(
+        "Export Excel",
+        data=export_data,
+        file_name="boq_breakdown_result.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+except Exception:
+    toolbar_cols[7].button("Export Excel", disabled=True, use_container_width=True)
+    st.warning("Excel export is disabled because openpyxl is not installed yet.")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -715,4 +720,3 @@ with library_expander:
 
 st.markdown("</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
-
