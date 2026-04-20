@@ -753,7 +753,9 @@ if selected_article:
     ]
     if not article_row.empty:
         article = article_row.iloc[0]
-        ensure_article_breakdown(selected_article, article["Template_Name"])
+
+        if get_breakdown(selected_article).empty and str(article["Template_Name"]).strip():
+            load_template(selected_article, article["Template_Name"])
 
         st.markdown("<div class='panel'>", unsafe_allow_html=True)
         st.markdown(
@@ -763,10 +765,6 @@ if selected_article:
             unsafe_allow_html=True,
         )
 
-        current_breakdown = get_breakdown(selected_article).copy()
-        current_breakdown["Type"] = current_breakdown["Type"].apply(normalize_type_value)
-        current_breakdown["Norm"] = current_breakdown["Norm"].apply(normalize_norm_value)
-
         top_cols = st.columns([1.0, 1.0, 1.3, 1.0, 1.0])
         add_clicked = top_cols[0].button("Add Row", use_container_width=True)
         delete_clicked = top_cols[1].button("Delete Selected", use_container_width=True)
@@ -774,24 +772,33 @@ if selected_article:
         calc_clicked = top_cols[3].button("Calculate This Article", use_container_width=True)
         close_clicked = top_cols[4].button("Close", use_container_width=True)
 
-        grid_response = AgGrid(
-            current_breakdown,
-            gridOptions=build_breakdown_grid(current_breakdown),
-            data_return_mode=DataReturnMode.AS_INPUT,
-            update_mode=GridUpdateMode.VALUE_CHANGED | GridUpdateMode.SELECTION_CHANGED,
-            fit_columns_on_grid_load=False,
-            allow_unsafe_jscode=True,
-            theme="streamlit",
-            height=420,
-            reload_data=False,
-        )
+        breakdown = get_breakdown(selected_article).copy()
 
-        updated_breakdown = pd.DataFrame(grid_response["data"])
-        if updated_breakdown.empty:
-            updated_breakdown = empty_breakdown_df()
-        set_breakdown(selected_article, updated_breakdown)
+        selected_indexes = []
+        if breakdown.empty:
+            st.warning("No breakdown rows yet. Click Reload Template or Add Row.")
+        else:
+            breakdown["Type"] = breakdown["Type"].apply(normalize_type_value)
+            breakdown["Norm"] = breakdown["Norm"].apply(normalize_norm_value)
 
-        selected_indexes = get_selected_indexes(grid_response.get("selected_rows", []))
+            grid_response = AgGrid(
+                breakdown,
+                gridOptions=build_breakdown_grid(breakdown),
+                data_return_mode=DataReturnMode.AS_INPUT,
+                update_mode=GridUpdateMode.VALUE_CHANGED | GridUpdateMode.SELECTION_CHANGED,
+                fit_columns_on_grid_load=True,
+                allow_unsafe_jscode=True,
+                theme="streamlit",
+                height=420,
+                key=f"breakdown_grid_{selected_article}",
+                reload_data=False,
+            )
+
+            updated_breakdown = pd.DataFrame(grid_response["data"])
+            if not updated_breakdown.empty:
+                set_breakdown(selected_article, updated_breakdown)
+
+            selected_indexes = get_selected_indexes(grid_response.get("selected_rows", []))
 
         if add_clicked:
             breakdown = get_breakdown(selected_article)
