@@ -4,7 +4,6 @@ from datetime import datetime
 
 import pandas as pd
 import streamlit as st
-from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, GridUpdateMode, JsCode
 
 st.set_page_config(page_title="BOQ Breakdown Calculator", layout="wide")
 
@@ -19,6 +18,7 @@ BOQ_COLUMNS = [
 ]
 
 BREAKDOWN_COLUMNS = [
+    "Select",
     "Type",
     "Level",
     "Category",
@@ -60,6 +60,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
     [
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "O",
             "Level": 0,
             "Category": "Main",
@@ -75,6 +76,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "S",
             "Level": 1,
             "Category": "Concrete",
@@ -90,6 +92,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "M",
             "Level": 2,
             "Category": "Concrete",
@@ -105,6 +108,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "M",
             "Level": 2,
             "Category": "Concrete",
@@ -120,6 +124,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "S",
             "Level": 1,
             "Category": "Pump",
@@ -135,6 +140,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "M",
             "Level": 2,
             "Category": "Pump",
@@ -150,6 +156,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "S",
             "Level": 1,
             "Category": "Steel",
@@ -165,6 +172,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "M",
             "Level": 2,
             "Category": "Steel",
@@ -180,6 +188,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "S",
             "Level": 1,
             "Category": "Formwork",
@@ -195,6 +204,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
         },
         {
             "Template_Name": "FOUNDATION_FOOTING",
+            "Select": False,
             "Type": "M",
             "Level": 2,
             "Category": "Formwork",
@@ -279,51 +289,6 @@ def normalize_boq_columns(df: pd.DataFrame) -> pd.DataFrame:
     return work[BOQ_COLUMNS].copy()
 
 
-def normalize_library_columns(df: pd.DataFrame) -> pd.DataFrame:
-    rename_map = {
-        "template_name": "Template_Name",
-        "type": "Type",
-        "level": "Level",
-        "category": "Category",
-        "code": "Code",
-        "description": "Description",
-        "describtion": "Description",
-        "norm": "Norm",
-        "formula": "Formula",
-        "resultant": "Resultant",
-        "quantity": "Quantity",
-        "unit": "Unit",
-        "unit price": "Unit Price",
-        "unit_price": "Unit Price",
-        "total cost": "Total Cost",
-        "total_cost": "Total Cost",
-    }
-    work = df.copy()
-    work.columns = [rename_map.get(str(c).strip().lower(), c) for c in work.columns]
-
-    required = ["Template_Name", "Type", "Category", "Code", "Description", "Norm", "Formula", "Unit"]
-    for column in required:
-        if column not in work.columns:
-            raise ValueError(f"Library file is missing required column: {column}")
-
-    defaults = {
-        "Level": 0,
-        "Resultant": None,
-        "Quantity": None,
-        "Unit Price": None,
-        "Total Cost": None,
-    }
-    for column, value in defaults.items():
-        if column not in work.columns:
-            work[column] = value
-
-    work["Type"] = work["Type"].apply(normalize_type_value)
-    work["Norm"] = work["Norm"].apply(normalize_norm_value)
-    work["Level"] = pd.to_numeric(work["Level"], errors="coerce").fillna(0).astype(int)
-
-    return work[["Template_Name", *BREAKDOWN_COLUMNS]].copy()
-
-
 def get_breakdown(article_id: str) -> pd.DataFrame:
     if article_id not in st.session_state.breakdowns:
         st.session_state.breakdowns[article_id] = empty_breakdown_df()
@@ -333,6 +298,7 @@ def get_breakdown(article_id: str) -> pd.DataFrame:
 def set_breakdown(article_id: str, df: pd.DataFrame):
     work = df.copy()
     defaults = {
+        "Select": False,
         "Type": "M",
         "Level": 2,
         "Category": "",
@@ -353,23 +319,24 @@ def set_breakdown(article_id: str, df: pd.DataFrame):
     work["Type"] = work["Type"].apply(normalize_type_value)
     work["Norm"] = work["Norm"].apply(normalize_norm_value)
     work["Level"] = pd.to_numeric(work["Level"], errors="coerce").fillna(0).astype(int)
+    work["Select"] = work["Select"].fillna(False).astype(bool)
 
     st.session_state.breakdowns[article_id] = work[BREAKDOWN_COLUMNS].copy()
 
 
 def load_template(article_id: str, template_name: str):
-    library = st.session_state.library_df
-    rows = library[library["Template_Name"].astype(str) == str(template_name)].copy()
+    rows = st.session_state.library_df[
+        st.session_state.library_df["Template_Name"].astype(str) == str(template_name)
+    ].copy()
     if rows.empty:
         st.warning(f"Template '{template_name}' was not found.")
         return
+    rows["Select"] = False
     set_breakdown(article_id, rows[BREAKDOWN_COLUMNS].copy())
 
 
 def ensure_article_breakdown(article_id: str, template_name: str):
-    if not get_breakdown(article_id).empty:
-        return
-    if str(template_name).strip():
+    if get_breakdown(article_id).empty and str(template_name).strip():
         load_template(article_id, template_name)
 
 
@@ -471,6 +438,7 @@ def calculate_article(article_row: pd.Series, breakdown_df: pd.DataFrame):
         article_total = float(pd.to_numeric(work.loc[o_mask, "Total Cost"], errors="coerce").fillna(0.0).iloc[-1])
     unit_rate = article_total / boq_qty if boq_qty else 0.0
 
+    work["Select"] = False
     return work, unit_rate, article_total, errors
 
 
@@ -497,11 +465,10 @@ def export_excel() -> bytes:
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         st.session_state.boq_df.to_excel(writer, sheet_name="BOQ", index=False)
-        st.session_state.library_df.to_excel(writer, sheet_name="Library", index=False)
         all_breakdowns = []
         for article_id, df in st.session_state.breakdowns.items():
             if not df.empty:
-                temp = df.copy()
+                temp = df.copy().drop(columns=["Select"], errors="ignore")
                 temp.insert(0, "Article_ID", article_id)
                 all_breakdowns.append(temp)
         if all_breakdowns:
@@ -517,6 +484,7 @@ def fmt_money(value):
 
 def make_new_breakdown_row(row_type="M", level=2):
     return {
+        "Select": False,
         "Type": row_type,
         "Level": level,
         "Category": "",
@@ -532,43 +500,32 @@ def make_new_breakdown_row(row_type="M", level=2):
     }
 
 
-def get_selected_indexes(selected_rows):
-    indexes = []
-    for row in selected_rows or []:
-        node_index = row.get("_selectedRowNodeInfo", {}).get("nodeRowIndex")
-        if node_index is not None:
-            indexes.append(int(node_index))
-    return sorted(set(indexes))
+def breakdown_grid_df(article_id: str) -> pd.DataFrame:
+    df = get_breakdown(article_id).copy()
+    if df.empty:
+        return df
+
+    type_badge = {
+        "O": "O - Overall",
+        "S": "S - Subgroup",
+        "M": "M - Material/Work",
+    }
+
+    df["Type_Display"] = df["Type"].apply(lambda v: type_badge.get(normalize_type_value(v), str(v)))
+    return df
 
 
-def build_breakdown_grid(df: pd.DataFrame):
-    gb = GridOptionsBuilder.from_dataframe(df)
-    gb.configure_default_column(editable=st.session_state.edit_mode, resizable=True, sortable=False, filter=False)
-    gb.configure_selection("multiple", use_checkbox=True)
-    gb.configure_column("Type", editable=st.session_state.edit_mode, cellEditor="agSelectCellEditor", cellEditorParams={"values": ["O", "S", "M"]})
-    gb.configure_column("Norm", editable=st.session_state.edit_mode, cellEditor="agSelectCellEditor", cellEditorParams={"values": ["N", "C"]})
-    gb.configure_column("Level", editable=st.session_state.edit_mode, type=["numericColumn"])
-    gb.configure_column("Resultant", editable=False, type=["numericColumn"])
-    gb.configure_column("Quantity", editable=False, type=["numericColumn"])
-    gb.configure_column("Total Cost", editable=False, type=["numericColumn"])
-    gb.configure_column("Unit Price", type=["numericColumn"])
-
-    row_style = JsCode(
-        """
-        function(params) {
-            if (!params.data || !params.data.Type) return {};
-            const t = String(params.data.Type).toUpperCase();
-            if (t === "O") return {backgroundColor: "#fde68a", fontWeight: "700"};
-            if (t === "S") return {backgroundColor: "#bfdbfe", fontWeight: "600"};
-            if (t === "M") return {backgroundColor: "#dcfce7"};
-            return {};
+def apply_grid_changes(article_id: str, edited_df: pd.DataFrame):
+    if "Type_Display" in edited_df.columns:
+        reverse = {
+            "O - Overall": "O",
+            "S - Subgroup": "S",
+            "M - Material/Work": "M",
         }
-        """
-    )
-
-    options = gb.build()
-    options["getRowStyle"] = row_style
-    return options
+        edited_df = edited_df.copy()
+        edited_df["Type"] = edited_df["Type_Display"].map(reverse).fillna(edited_df["Type"])
+        edited_df = edited_df.drop(columns=["Type_Display"], errors="ignore")
+    set_breakdown(article_id, edited_df)
 
 
 init_state()
@@ -612,6 +569,9 @@ st.markdown(
         padding: 10px 12px;
         margin-bottom: 10px;
     }
+    .o-note { background:#fde68a; padding:4px 10px; border-radius:999px; display:inline-block; margin-right:8px; }
+    .s-note { background:#bfdbfe; padding:4px 10px; border-radius:999px; display:inline-block; margin-right:8px; }
+    .m-note { background:#dcfce7; padding:4px 10px; border-radius:999px; display:inline-block; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -621,11 +581,11 @@ st.markdown("<div class='excel-shell'>", unsafe_allow_html=True)
 st.markdown("<div class='toolbar'>", unsafe_allow_html=True)
 st.markdown("<div class='sheet-title'>BOQ Breakdown Calculator</div>", unsafe_allow_html=True)
 st.markdown(
-    "<div class='sheet-subtitle'>One colored editable breakdown table. Click an Article_ID like A001 to open its own breakdown.</div>",
+    "<div class='sheet-subtitle'>Click an Article_ID like A001 to open its own breakdown. One active editable table only.</div>",
     unsafe_allow_html=True,
 )
 
-toolbar_cols = st.columns([1.3, 1.3, 1.0, 1.0, 1.4, 1.4, 3.5])
+toolbar_cols = st.columns([1.3, 1.3, 1.0, 1.0, 1.4, 3.5])
 boq_file = toolbar_cols[0].file_uploader("Import BOQ", type=["xlsx"], label_visibility="collapsed", key="boq_upload")
 lib_file = toolbar_cols[1].file_uploader("Import Library", type=["xlsx"], label_visibility="collapsed", key="lib_upload")
 
@@ -636,11 +596,10 @@ if toolbar_cols[3].button("Edit On" if st.session_state.edit_mode else "Edit Off
     st.session_state.edit_mode = not st.session_state.edit_mode
 
 run_clicked = toolbar_cols[4].button("Run Calculation", type="primary", use_container_width=True)
-load_sample_clicked = toolbar_cols[5].button("Load Sample", use_container_width=True)
 
 try:
     export_data = export_excel()
-    toolbar_cols[6].download_button(
+    toolbar_cols[5].download_button(
         "Export Excel",
         data=export_data,
         file_name="boq_breakdown_result.xlsx",
@@ -648,7 +607,7 @@ try:
         use_container_width=True,
     )
 except Exception:
-    toolbar_cols[6].button("Export Excel", disabled=True, use_container_width=True)
+    toolbar_cols[5].button("Export Excel", disabled=True, use_container_width=True)
 
 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -665,13 +624,6 @@ if boq_file is not None or lib_file is not None:
             st.success("Imported files loaded.")
         except Exception as exc:
             st.error(str(exc))
-
-if load_sample_clicked:
-    st.session_state.boq_df = DEFAULT_BOQ.copy()
-    st.session_state.library_df = DEFAULT_LIBRARY.copy()
-    st.session_state.breakdowns = {}
-    st.session_state.selected_article = None
-    st.success("Sample data loaded.")
 
 if run_clicked:
     errors = run_all()
@@ -753,15 +705,19 @@ if selected_article:
     ]
     if not article_row.empty:
         article = article_row.iloc[0]
-
-        if get_breakdown(selected_article).empty and str(article["Template_Name"]).strip():
-            load_template(selected_article, article["Template_Name"])
+        ensure_article_breakdown(selected_article, article["Template_Name"])
 
         st.markdown("<div class='panel'>", unsafe_allow_html=True)
         st.markdown(
             f"<div class='active-article'><b>{selected_article}</b><br>"
             f"Description: {article['Description']}<br>"
             f"Quantity: {article['Quantity']} {article['Unit']}</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<span class='o-note'>O = Overall</span>"
+            "<span class='s-note'>S = Subgroup</span>"
+            "<span class='m-note'>M = Material/Work</span>",
             unsafe_allow_html=True,
         )
 
@@ -772,41 +728,45 @@ if selected_article:
         calc_clicked = top_cols[3].button("Calculate This Article", use_container_width=True)
         close_clicked = top_cols[4].button("Close", use_container_width=True)
 
-        breakdown = get_breakdown(selected_article).copy()
-        selected_indexes = []
+        if "selected_breakdown_rows" not in st.session_state:
+            st.session_state.selected_breakdown_rows = []
 
+        breakdown = breakdown_grid_df(selected_article)
         if breakdown.empty:
-            st.warning("No breakdown rows yet. Click Reload Template or Add Row.")
+            st.warning("No breakdown rows yet. Click Reload Template.")
         else:
-            breakdown["Type"] = breakdown["Type"].apply(normalize_type_value)
-            breakdown["Norm"] = breakdown["Norm"].apply(normalize_norm_value)
-
-            grid_response = AgGrid(
+            edited_breakdown = st.data_editor(
                 breakdown,
-                gridOptions=build_breakdown_grid(breakdown),
-                data_return_mode=DataReturnMode.AS_INPUT,
-                update_mode=GridUpdateMode.VALUE_CHANGED | GridUpdateMode.SELECTION_CHANGED,
-                fit_columns_on_grid_load=True,
-                allow_unsafe_jscode=True,
-                theme="streamlit",
-                height=420,
-                key=f"breakdown_grid_{selected_article}",
-                reload_data=False,
+                num_rows="dynamic" if st.session_state.edit_mode else "fixed",
+                use_container_width=True,
+                hide_index=True,
+                key=f"breakdown_editor_{selected_article}",
+                disabled=not st.session_state.edit_mode,
+                column_config={
+                    "Select": st.column_config.CheckboxColumn("Select"),
+                    "Type_Display": st.column_config.TextColumn("Type", disabled=True),
+                    "Level": st.column_config.NumberColumn("Level", format="%d"),
+                    "Category": st.column_config.TextColumn("Category"),
+                    "Code": st.column_config.TextColumn("Code"),
+                    "Description": st.column_config.TextColumn("Description"),
+                    "Norm": st.column_config.SelectboxColumn("Norm", options=["N", "C"]),
+                    "Formula": st.column_config.TextColumn("Formula"),
+                    "Resultant": st.column_config.NumberColumn("Resultant", format="%.3f", disabled=True),
+                    "Quantity": st.column_config.NumberColumn("Quantity", format="%.3f", disabled=True),
+                    "Unit": st.column_config.TextColumn("Unit"),
+                    "Unit Price": st.column_config.NumberColumn("Unit Price", format="%.4f"),
+                    "Total Cost": st.column_config.NumberColumn("Total Cost", format="%.2f", disabled=True),
+                    "Type": None,
+                },
             )
-
-            updated_breakdown = pd.DataFrame(grid_response["data"])
-            if not updated_breakdown.empty:
-                set_breakdown(selected_article, updated_breakdown)
-
-            selected_indexes = get_selected_indexes(grid_response.get("selected_rows", []))
+            apply_grid_changes(selected_article, edited_breakdown)
 
         if add_clicked:
             breakdown = get_breakdown(selected_article)
-
-            if selected_indexes:
-                selected_index = selected_indexes[0]
-                selected_type = normalize_type_value(breakdown.iloc[selected_index]["Type"])
-
+            selected_rows = breakdown[breakdown["Select"].fillna(False)]
+            if not selected_rows.empty:
+                selected_index = selected_rows.index[0]
+                selected_type = normalize_type_value(selected_rows.iloc[0]["Type"])
                 if selected_type == "M":
                     insert_at = selected_index + 1
                     new_row = make_new_breakdown_row("M", 2)
@@ -820,19 +780,16 @@ if selected_article:
                 insert_at = len(breakdown)
                 new_row = make_new_breakdown_row("M", 2)
 
-            new_row_df = pd.DataFrame([new_row])
             breakdown = pd.concat(
-                [breakdown.iloc[:insert_at], new_row_df, breakdown.iloc[insert_at:]],
+                [breakdown.iloc[:insert_at], pd.DataFrame([new_row]), breakdown.iloc[insert_at:]],
                 ignore_index=True,
             )
             set_breakdown(selected_article, breakdown)
             st.rerun()
 
         if delete_clicked:
-            if selected_indexes:
-                breakdown = get_breakdown(selected_article)
-                breakdown = breakdown.drop(index=selected_indexes).reset_index(drop=True)
-                set_breakdown(selected_article, breakdown)
+            if delete_selected_breakdown_rows(selected_article):
+                st.success("Selected rows deleted.")
                 st.rerun()
             else:
                 st.warning("Select at least one row to delete.")
@@ -864,26 +821,6 @@ if selected_article:
             st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
-
-library_expander = st.expander("Template Library Sheet")
-with library_expander:
-    st.session_state.library_df = st.data_editor(
-        st.session_state.library_df,
-        num_rows="dynamic" if st.session_state.edit_mode else "fixed",
-        use_container_width=True,
-        hide_index=True,
-        key="library_sheet",
-        disabled=not st.session_state.edit_mode,
-        column_config={
-            "Type": st.column_config.SelectboxColumn("Type", options=["O", "S", "M"]),
-            "Level": st.column_config.NumberColumn("Level", format="%d"),
-            "Norm": st.column_config.SelectboxColumn("Norm", options=["N", "C"]),
-            "Unit Price": st.column_config.NumberColumn("Unit Price", format="%.4f"),
-            "Resultant": st.column_config.NumberColumn("Resultant", format="%.3f"),
-            "Quantity": st.column_config.NumberColumn("Quantity", format="%.3f"),
-            "Total Cost": st.column_config.NumberColumn("Total Cost", format="%.2f"),
-        },
-    )
 
 st.markdown("</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
