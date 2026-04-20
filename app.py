@@ -567,11 +567,11 @@ def save_snapshot():
     st.session_state.save_message = f"Snapshot prepared at {timestamp}"
 
 
-def get_group_marker(row_type: str) -> str:
+def get_type_group_marker(row_type: str) -> str:
     markers = {
-        "O": "O",
-        "S": "S",
-        "M": "M",
+        "O": "Y O",
+        "S": "B S",
+        "M": "G M",
     }
     return markers.get(normalize_type_value(row_type), "")
 
@@ -701,12 +701,14 @@ def build_breakdown_editor_df(article_id: str) -> pd.DataFrame:
 
     editor_df = breakdown.copy()
     editor_df.insert(0, "Select", selected_flags)
-    editor_df.insert(1, "Group", editor_df["Type"].apply(get_group_marker))
+    editor_df.insert(1, "Group", editor_df["Type"].apply(get_type_group_marker))
     editor_df["Select"] = editor_df["Select"].astype(bool)
     editor_df["Group"] = editor_df["Group"].astype(str)
     for column in ["Type", "Category", "Code", "Description", "Norm", "Formula", "Unit"]:
         if column in editor_df.columns:
             editor_df[column] = editor_df[column].fillna("").astype(str)
+    if "Category" in editor_df.columns:
+        editor_df["Category"] = editor_df["Category"].apply(lambda value: str(value).strip())
     return editor_df
 
 
@@ -860,9 +862,9 @@ with boq_tab:
 
         selected_breakdown_index = st.session_state.selected_breakdown_rows.get(selected_article)
 
-        add_col, delete_col = st.columns(2)
+        add_col, delete_col, _ = st.columns([1, 1, 4])
         with add_col:
-            if st.button("Add", use_container_width=True, key=f"add_row_{selected_article}"):
+            if st.button("Add", key=f"add_row_{selected_article}"):
                 target, message = infer_add_target(selected_article, selected_breakdown_index)
                 if message:
                     st.warning(message)
@@ -872,7 +874,7 @@ with boq_tab:
                     if message:
                         st.warning(message)
         with delete_col:
-            if st.button("Delete Row", use_container_width=True, key=f"delete_row_{selected_article}"):
+            if st.button("Delete", key=f"delete_row_{selected_article}"):
                 if selected_breakdown_index is None:
                     st.warning("Select a row first.")
                 else:
@@ -882,7 +884,7 @@ with boq_tab:
                     else:
                         st.session_state.selected_breakdown_rows[selected_article] = None
 
-        st.caption("Select one row, then use Add or Delete above. Add is automatic: O -> S, S -> M, M -> new M under the same S.")
+        st.caption("Select one row, then use Add or Delete above. Type groups use one shared color style: O, S, M.")
 
         edited_breakdown = st.data_editor(
             build_breakdown_editor_df(selected_article),
