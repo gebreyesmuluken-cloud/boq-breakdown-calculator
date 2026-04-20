@@ -1,5 +1,7 @@
 import io
+import importlib.util
 import math
+import zipfile
 from datetime import datetime
 
 import pandas as pd
@@ -460,21 +462,48 @@ def recalculate_all():
     return errors
 
 
+def get_excel_engine():
+    for engine in ["openpyxl", "xlsxwriter"]:
+        if importlib.util.find_spec(engine) is not None:
+            return engine
+    return None
+
+
 def dataframe_to_excel_bytes(df: pd.DataFrame, sheet_name: str) -> bytes:
+    engine = get_excel_engine()
+    if engine is None:
+        raise ModuleNotFoundError("No Excel writer engine is installed.")
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    with pd.ExcelWriter(output, engine=engine) as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
     return output.getvalue()
 
 
 def build_export_workbook() -> bytes:
+    engine = get_excel_engine()
+    if engine is None:
+        raise ModuleNotFoundError("No Excel writer engine is installed.")
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    with pd.ExcelWriter(output, engine=engine) as writer:
         st.session_state.boq_df.to_excel(writer, index=False, sheet_name="BOQ")
         st.session_state.library_df.to_excel(writer, index=False, sheet_name="Library")
         for article_id, breakdown in st.session_state.breakdowns.items():
             sheet_name = f"BD_{article_id}"[:31]
             breakdown.to_excel(writer, index=False, sheet_name=sheet_name)
+    return output.getvalue()
+
+
+def dataframe_to_csv_bytes(df: pd.DataFrame) -> bytes:
+    return df.to_csv(index=False).encode("utf-8")
+
+
+def build_export_zip() -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("BOQ.csv", st.session_state.boq_df.to_csv(index=False))
+        archive.writestr("Library.csv", st.session_state.library_df.to_csv(index=False))
+        for article_id, breakdown in st.session_state.breakdowns.items():
+            archive.writestr(f"BD_{article_id}.csv", breakdown.to_csv(index=False))
     return output.getvalue()
 
 
@@ -529,21 +558,40 @@ with st.sidebar:
     if st.button("Save Snapshot", use_container_width=True):
         save_snapshot()
 
-    st.download_button(
-        "Download BOQ",
-        data=dataframe_to_excel_bytes(st.session_state.boq_df, "BOQ"),
-        file_name="boq.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-    )
+    excel_engine = get_excel_engine()
+    if excel_engine:
+        st.download_button(
+            "Download BOQ",
+            data=dataframe_to_excel_bytes(st.session_state.boq_df, "BOQ"),
+            file_name="boq.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
 
-    st.download_button(
-        "Download Workbook",
-        data=build_export_workbook(),
-        file_name="boq_breakdown_export.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-    )
+        st.download_button(
+            "Download Workbook",
+            data=build_export_workbook(),
+            file_name="boq_breakdown_export.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+    else:
+        st.info("Excel export is unavailable in this environment. CSV downloads are enabled instead.")
+        st.download_button(
+            "Download BOQ CSV",
+            data=dataframe_to_csv_bytes(st.session_state.boq_df),
+            file_name="boq.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+        st.download_button(
+            "Download Export ZIP",
+            data=build_export_zip(),
+            file_name="boq_breakdown_export.zip",
+            mime="application/zip",
+            use_container_width=True,
+        )
 
     if st.session_state.save_message:
         st.info(st.session_state.save_message)
