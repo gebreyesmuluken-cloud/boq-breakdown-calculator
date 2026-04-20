@@ -600,7 +600,7 @@ boq_tab, library_tab = st.tabs(["BOQ", "Library"])
 
 with boq_tab:
     st.subheader("Bill of Quantities")
-    st.caption("Click a BOQ row like A001 to open that article's breakdown panel below.")
+    st.caption("Click A001 or A002 in the BOQ table to open that article's own breakdown panel below.")
     boq_df = st.session_state.boq_df.copy()
     selection_event = st.dataframe(
         boq_df,
@@ -615,17 +615,11 @@ with boq_tab:
     if selected_rows:
         selected_index = selected_rows[0]
         st.session_state.selected_article = str(boq_df.iloc[selected_index]["Article_ID"])
-    elif boq_df["Article_ID"].astype(str).tolist() and st.session_state.selected_article not in boq_df["Article_ID"].astype(str).tolist():
+    elif (
+        boq_df["Article_ID"].astype(str).tolist()
+        and st.session_state.selected_article not in boq_df["Article_ID"].astype(str).tolist()
+    ):
         st.session_state.selected_article = str(boq_df.iloc[0]["Article_ID"])
-
-    with st.expander("Edit BOQ Table", expanded=False):
-        edited_boq = st.data_editor(
-            st.session_state.boq_df,
-            num_rows="dynamic",
-            use_container_width=True,
-            key="boq_editor",
-        )
-        st.session_state.boq_df = normalize_boq_columns(edited_boq)
 
     st.divider()
     st.subheader("Breakdown Calculation")
@@ -646,7 +640,7 @@ with boq_tab:
             st.markdown(f"### {selected_article}")
             st.write(f"Description: {selected_row['Description']}")
             st.write(f"Quantity: {selected_row['Quantity']} {selected_row['Unit']}")
-            st.caption("Each article has its own separate breakdown calculation.")
+            st.caption("Each article has its own separate breakdown calculation panel.")
         with action_col:
             if st.button("Calculate This Article", use_container_width=True):
                 breakdown = get_breakdown(selected_article)
