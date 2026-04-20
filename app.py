@@ -683,8 +683,6 @@ with boq_tab:
             st.session_state.selected_article = article_options[0]
 
         selected_article = st.session_state.selected_article
-        calculate_and_store_article(selected_article)
-        boq_df = st.session_state.boq_df
         selected_row = boq_df[boq_df["Article_ID"].astype(str) == selected_article].iloc[0]
 
         info_col, action_col = st.columns([3, 1])
@@ -715,6 +713,7 @@ with boq_tab:
             key=f"breakdown_editor_{selected_article}",
         )
         set_breakdown(selected_article, edited_breakdown)
+        calculate_and_store_article(selected_article)
     else:
         st.info("Add at least one BOQ article to manage breakdowns.")
 
