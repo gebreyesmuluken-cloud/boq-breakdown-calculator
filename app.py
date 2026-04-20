@@ -494,6 +494,26 @@ def recalculate_all():
     return errors
 
 
+def calculate_and_store_article(article_id: str):
+    boq = st.session_state.boq_df.copy()
+    matching_rows = boq[boq["Article_ID"].astype(str) == str(article_id)]
+    if matching_rows.empty:
+        return []
+
+    row_index = matching_rows.index[0]
+    article = boq.loc[row_index]
+    template_name = str(article.get("Template_Name", "")).strip()
+    ensure_article_breakdown(article_id, template_name)
+
+    breakdown = get_breakdown(article_id)
+    calculated, unit_price, total_price, article_errors = calculate_article(article, breakdown)
+    set_breakdown(article_id, calculated)
+    boq.at[row_index, "Unit Price"] = unit_price if unit_price else None
+    boq.at[row_index, "Total Price"] = total_price if total_price else None
+    st.session_state.boq_df = boq
+    return article_errors
+
+
 def get_excel_engine():
     for engine in ["openpyxl", "xlsxwriter"]:
         if importlib.util.find_spec(engine) is not None:
@@ -663,28 +683,19 @@ with boq_tab:
             st.session_state.selected_article = article_options[0]
 
         selected_article = st.session_state.selected_article
+        calculate_and_store_article(selected_article)
+        boq_df = st.session_state.boq_df
         selected_row = boq_df[boq_df["Article_ID"].astype(str) == selected_article].iloc[0]
-        template_name = str(selected_row.get("Template_Name", "")).strip()
-        ensure_article_breakdown(selected_article, template_name)
 
         info_col, action_col = st.columns([3, 1])
         with info_col:
             st.markdown(f"### {selected_article}")
             st.write(f"Description: {selected_row['Description']}")
             st.write(f"Quantity: {selected_row['Quantity']} {selected_row['Unit']}")
-            st.caption("Each article has its own separate breakdown calculation panel.")
+            st.caption("Each article has its own separate breakdown calculation.")
         with action_col:
             if st.button("Calculate This Article", use_container_width=True):
-                breakdown = get_breakdown(selected_article)
-                calculated, unit_price, total_price, calc_errors = calculate_article(
-                    selected_row, breakdown
-                )
-                set_breakdown(selected_article, calculated)
-                row_index = boq_df[boq_df["Article_ID"].astype(str) == selected_article].index[0]
-                st.session_state.boq_df.at[row_index, "Unit Price"] = unit_price if unit_price else None
-                st.session_state.boq_df.at[row_index, "Total Price"] = (
-                    total_price if total_price else None
-                )
+                calc_errors = calculate_and_store_article(selected_article)
                 if calc_errors:
                     st.warning("\n".join(calc_errors))
                 else:
@@ -694,6 +705,13 @@ with boq_tab:
             get_breakdown(selected_article),
             num_rows="dynamic",
             use_container_width=True,
+            column_config={
+                "Norm": st.column_config.SelectboxColumn(
+                    "Norm",
+                    options=["N", "C"],
+                    required=True,
+                ),
+            },
             key=f"breakdown_editor_{selected_article}",
         )
         set_breakdown(selected_article, edited_breakdown)
@@ -706,6 +724,13 @@ with library_tab:
         st.session_state.library_df,
         num_rows="dynamic",
         use_container_width=True,
+        column_config={
+            "Norm": st.column_config.SelectboxColumn(
+                "Norm",
+                options=["N", "C"],
+                required=True,
+            ),
+        },
         key="library_editor",
     )
     st.session_state.library_df = normalize_library_columns(edited_library)
