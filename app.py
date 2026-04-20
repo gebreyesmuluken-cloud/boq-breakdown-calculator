@@ -433,16 +433,12 @@ def calculate_article(article_row: pd.Series, breakdown_df: pd.DataFrame):
             while open_headers and row_level <= open_headers[-1]["level"]:
                 close_header()
 
-        parent_qty = boq_qty
-        if open_headers:
-            parent_qty = float(open_headers[-1]["quantity"])
-
         quantity = 0.0
         total_cost = 0.0
 
         if row_type in {"O", "S", "M"}:
             if norm == "N":
-                quantity = resultant * parent_qty
+                quantity = resultant * boq_qty
             elif norm == "C":
                 quantity = resultant
             else:
