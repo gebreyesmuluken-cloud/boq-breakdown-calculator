@@ -113,7 +113,7 @@ DEFAULT_LIBRARY = pd.DataFrame(
             "Category": "Concrete",
             "Code": "0490000411",
             "Description": "Concrete labor",
-            "Norm": "N",
+            "Norm": "C",
             "Formula": "30/60",
             "Resultant": None,
             "Quantity": None,
