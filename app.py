@@ -23,6 +23,7 @@ BOQ_STORAGE_COLUMNS = BOQ_COLUMNS.copy()
 
 BREAKDOWN_COLUMNS = [
     "Type",
+    "Level",
     "Category",
     "Code",
     "Description",
@@ -63,10 +64,11 @@ DEFAULT_LIBRARY = pd.DataFrame(
         {
             "Template_Name": "FOUNDATION_FOOTING",
             "Type": "O",
+            "Level": 0,
             "Category": "Main",
             "Code": "O-001",
             "Description": "FOUNDATION FOOTING",
-            "Norm": "C",
+            "Norm": "N",
             "Formula": "1",
             "Resultant": None,
             "Quantity": None,
@@ -77,10 +79,11 @@ DEFAULT_LIBRARY = pd.DataFrame(
         {
             "Template_Name": "FOUNDATION_FOOTING",
             "Type": "S",
+            "Level": 1,
             "Category": "Concrete",
             "Code": "S-001",
             "Description": "Concrete works",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "1",
             "Resultant": None,
             "Quantity": None,
@@ -91,10 +94,11 @@ DEFAULT_LIBRARY = pd.DataFrame(
         {
             "Template_Name": "FOUNDATION_FOOTING",
             "Type": "M",
+            "Level": 2,
             "Category": "Concrete",
             "Code": "0126120109",
             "Description": "Supply concrete C30/37",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "1.05",
             "Resultant": None,
             "Quantity": None,
@@ -105,10 +109,11 @@ DEFAULT_LIBRARY = pd.DataFrame(
         {
             "Template_Name": "FOUNDATION_FOOTING",
             "Type": "M",
+            "Level": 2,
             "Category": "Concrete",
             "Code": "0490000411",
             "Description": "Concrete labor",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "30/60",
             "Resultant": None,
             "Quantity": None,
@@ -119,10 +124,11 @@ DEFAULT_LIBRARY = pd.DataFrame(
         {
             "Template_Name": "FOUNDATION_FOOTING",
             "Type": "S",
+            "Level": 1,
             "Category": "Pump",
             "Code": "S-002",
             "Description": "Pump works",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "1.05",
             "Resultant": None,
             "Quantity": None,
@@ -133,10 +139,11 @@ DEFAULT_LIBRARY = pd.DataFrame(
         {
             "Template_Name": "FOUNDATION_FOOTING",
             "Type": "M",
+            "Level": 2,
             "Category": "Pump",
             "Code": "0126120308",
             "Description": "Concrete pumping 36m",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "1.05",
             "Resultant": None,
             "Quantity": None,
@@ -147,10 +154,11 @@ DEFAULT_LIBRARY = pd.DataFrame(
         {
             "Template_Name": "FOUNDATION_FOOTING",
             "Type": "S",
+            "Level": 1,
             "Category": "Steel",
             "Code": "S-003",
             "Description": "Reinforcement works",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "80",
             "Resultant": None,
             "Quantity": None,
@@ -161,10 +169,11 @@ DEFAULT_LIBRARY = pd.DataFrame(
         {
             "Template_Name": "FOUNDATION_FOOTING",
             "Type": "M",
+            "Level": 2,
             "Category": "Steel",
             "Code": "0126111101",
             "Description": "Reinforcement bars",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "1",
             "Resultant": None,
             "Quantity": None,
@@ -175,10 +184,11 @@ DEFAULT_LIBRARY = pd.DataFrame(
         {
             "Template_Name": "FOUNDATION_FOOTING",
             "Type": "S",
+            "Level": 1,
             "Category": "Formwork",
             "Code": "S-004",
             "Description": "Formwork works",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "6.67",
             "Resultant": None,
             "Quantity": None,
@@ -189,10 +199,11 @@ DEFAULT_LIBRARY = pd.DataFrame(
         {
             "Template_Name": "FOUNDATION_FOOTING",
             "Type": "M",
+            "Level": 2,
             "Category": "Formwork",
             "Code": "0126131003",
             "Description": "Formwork footing",
-            "Norm": "F",
+            "Norm": "N",
             "Formula": "1.05",
             "Resultant": None,
             "Quantity": None,
@@ -221,6 +232,26 @@ def normalize_type_value(value) -> str:
         "D": "M",
     }
     return legacy_map.get(type_value, type_value)
+
+
+def normalize_norm_value(value) -> str:
+    norm_value = str(value).strip().upper()
+    legacy_map = {
+        "F": "N",
+    }
+    return legacy_map.get(norm_value, norm_value)
+
+
+def normalize_level_value(value, row_type: str) -> int:
+    default_levels = {
+        "O": 0,
+        "S": 1,
+        "M": 2,
+    }
+    parsed = pd.to_numeric(value, errors="coerce")
+    if pd.notna(parsed):
+        return max(0, int(parsed))
+    return default_levels.get(row_type, 0)
 
 
 def init_state():
@@ -274,6 +305,7 @@ def normalize_library_columns(df: pd.DataFrame) -> pd.DataFrame:
     rename_map = {
         "template_name": "Template_Name",
         "type": "Type",
+        "level": "Level",
         "catagory": "Category",
         "category": "Category",
         "code": "Code",
@@ -294,6 +326,7 @@ def normalize_library_columns(df: pd.DataFrame) -> pd.DataFrame:
     required = [
         "Template_Name",
         "Type",
+        "Level",
         "Category",
         "Code",
         "Description",
@@ -356,46 +389,39 @@ def calculate_article(article_row: pd.Series, breakdown_df: pd.DataFrame):
 
     boq_qty = float(pd.to_numeric(article_row["Quantity"], errors="coerce") or 0.0)
     errors = []
-    current_subgroup_qty = boq_qty
-    current_subgroup_start = None
-    current_overall_start = None
+    open_headers = []
+    overall_total = 0.0
 
-    def close_subgroup(end_idx: int):
-        nonlocal current_subgroup_start
-        if current_subgroup_start is None or end_idx < current_subgroup_start:
+    def close_header():
+        nonlocal overall_total
+        if not open_headers:
             return
-        subtotal = pd.to_numeric(
-            work.loc[current_subgroup_start + 1 : end_idx, "Total Cost"], errors="coerce"
-        ).fillna(0.0).sum()
-        work.at[current_subgroup_start, "Unit Price"] = None
-        work.at[current_subgroup_start, "Total Cost"] = subtotal
 
-    def close_overall(end_idx: int):
-        nonlocal current_overall_start
-        if current_overall_start is None or end_idx < current_overall_start:
-            return
-        subtotal = pd.to_numeric(
-            work.loc[current_overall_start + 1 : end_idx, "Total Cost"], errors="coerce"
-        ).fillna(0.0).sum()
-        work.at[current_overall_start, "Unit Price"] = None
-        work.at[current_overall_start, "Total Cost"] = subtotal
+        header = open_headers.pop()
+        subtotal = float(header["accumulated_cost"])
+        quantity = float(header["quantity"])
+        unit_price = subtotal / quantity if quantity else None
+
+        work.at[header["index"], "Unit Price"] = unit_price
+        work.at[header["index"], "Total Cost"] = subtotal
+
+        if open_headers:
+            open_headers[-1]["accumulated_cost"] += subtotal
+        else:
+            overall_total += subtotal
 
     for index in range(len(work)):
         row_type = normalize_type_value(work.at[index, "Type"])
+        row_level = normalize_level_value(work.at[index, "Level"], row_type)
+        is_header = row_type in {"O", "S"}
+
         work.at[index, "Type"] = row_type
-        norm = str(work.at[index, "Norm"]).strip().upper()
+        work.at[index, "Level"] = row_level
+
+        norm = normalize_norm_value(work.at[index, "Norm"])
+        work.at[index, "Norm"] = norm
         formula_text = work.at[index, "Formula"]
         unit_price = float(pd.to_numeric(work.at[index, "Unit Price"], errors="coerce") or 0.0)
-
-        if row_type == "O":
-            close_subgroup(index - 1)
-            close_overall(index - 1)
-            current_overall_start = index
-            current_subgroup_start = None
-            current_subgroup_qty = boq_qty
-        elif row_type == "S":
-            close_subgroup(index - 1)
-            current_subgroup_start = index
 
         try:
             resultant = eval_formula(formula_text)
@@ -403,31 +429,42 @@ def calculate_article(article_row: pd.Series, breakdown_df: pd.DataFrame):
             resultant = 0.0
             errors.append(f"{article_row['Article_ID']} - row {index + 1}: {exc}")
 
+        if is_header:
+            while open_headers and row_level <= open_headers[-1]["level"]:
+                close_header()
+
+        parent_qty = boq_qty
+        if open_headers:
+            parent_qty = float(open_headers[-1]["quantity"])
+
         quantity = 0.0
         total_cost = 0.0
 
-        if row_type == "O":
-            quantity = boq_qty
-        elif row_type == "S":
-            if norm == "F":
-                quantity = resultant * boq_qty
+        if row_type in {"O", "S", "M"}:
+            if norm == "N":
+                quantity = resultant * parent_qty
             elif norm == "C":
                 quantity = resultant
             else:
-                errors.append(f"{article_row['Article_ID']} - row {index + 1}: Norm must be F or C")
-            current_subgroup_qty = quantity
-        elif row_type == "M":
-            if norm == "F":
-                quantity = resultant * current_subgroup_qty
-            elif norm == "C":
-                quantity = resultant
+                errors.append(f"{article_row['Article_ID']} - row {index + 1}: Norm must be N or C")
+
+            if row_type == "M":
+                total_cost = quantity * unit_price
+                if open_headers:
+                    open_headers[-1]["accumulated_cost"] += total_cost
+                else:
+                    overall_total += total_cost
             else:
-                errors.append(f"{article_row['Article_ID']} - row {index + 1}: Norm must be F or C")
-            total_cost = quantity * unit_price
+                open_headers.append(
+                    {
+                        "index": index,
+                        "level": row_level,
+                        "quantity": quantity,
+                        "accumulated_cost": 0.0,
+                    }
+                )
         else:
-            errors.append(
-                f"{article_row['Article_ID']} - row {index + 1}: Type must be O, S, or M"
-            )
+            errors.append(f"{article_row['Article_ID']} - row {index + 1}: Type must be O, S, or M")
 
         work.at[index, "Resultant"] = resultant
         work.at[index, "Quantity"] = quantity
@@ -435,10 +472,9 @@ def calculate_article(article_row: pd.Series, breakdown_df: pd.DataFrame):
             work.at[index, "Unit Price"] = None
         work.at[index, "Total Cost"] = total_cost
 
-    close_subgroup(len(work) - 1)
-    close_overall(len(work) - 1)
+    while open_headers:
+        close_header()
 
-    overall_total = float(pd.to_numeric(work["Total Cost"], errors="coerce").fillna(0.0).sum())
     unit_price = overall_total / boq_qty if boq_qty else 0.0
     return work, unit_price, overall_total, errors
 
