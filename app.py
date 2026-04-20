@@ -702,6 +702,11 @@ def build_breakdown_editor_df(article_id: str) -> pd.DataFrame:
     editor_df = breakdown.copy()
     editor_df.insert(0, "Select", selected_flags)
     editor_df.insert(1, "Group", editor_df["Type"].apply(get_group_marker))
+    editor_df["Select"] = editor_df["Select"].astype(bool)
+    editor_df["Group"] = editor_df["Group"].astype(str)
+    for column in ["Type", "Category", "Code", "Description", "Norm", "Formula", "Unit"]:
+        if column in editor_df.columns:
+            editor_df[column] = editor_df[column].fillna("").astype(str)
     return editor_df
 
 
@@ -884,14 +889,6 @@ with boq_tab:
             num_rows="dynamic",
             use_container_width=True,
             column_config={
-                "Select": st.column_config.CheckboxColumn(
-                    "Select",
-                    default=False,
-                ),
-                "Group": st.column_config.TextColumn(
-                    "Group",
-                    disabled=True,
-                ),
                 "Norm": st.column_config.SelectboxColumn(
                     "Norm",
                     options=["N", "C"],
