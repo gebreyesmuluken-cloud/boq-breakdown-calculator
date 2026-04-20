@@ -500,6 +500,20 @@ def make_new_breakdown_row(row_type="M", level=2):
     }
 
 
+def delete_selected_breakdown_rows(article_id: str):
+    breakdown = get_breakdown(article_id)
+    if breakdown.empty:
+        return False
+
+    selected = breakdown["Select"].fillna(False).astype(bool)
+    if not selected.any():
+        return False
+
+    breakdown = breakdown.loc[~selected].reset_index(drop=True)
+    set_breakdown(article_id, breakdown)
+    return True
+
+
 def breakdown_editor_df(article_id: str) -> pd.DataFrame:
     df = get_breakdown(article_id).copy()
     if df.empty:
@@ -608,8 +622,7 @@ if boq_file is not None or lib_file is not None:
                 st.session_state.breakdowns = {}
                 st.session_state.selected_article = None
             if lib_file is not None:
-                incoming = lib_file.read()
-                st.session_state.library_df = DEFAULT_LIBRARY.copy() if not incoming else DEFAULT_LIBRARY.copy()
+                _ = lib_file.read()
             st.success("Imported files loaded.")
         except Exception as exc:
             st.error(str(exc))
@@ -706,7 +719,21 @@ if selected_article:
         st.markdown(color_badge_html(), unsafe_allow_html=True)
 
         top_cols = st.columns([1.0, 1.0, 1.3, 1.0, 1.0])
-        if top_cols[0].button("Add Row", use_container_width=True):
+        add_clicked = top_cols[0].button("Add Row", use_container_width=True)
+        delete_clicked = top_cols[1].button("Delete Selected", use_container_width=True)
+        reload_clicked = top_cols[2].button("Reload Template", use_container_width=True)
+        calc_clicked = top_cols[3].button("Calculate This Article", use_container_width=True)
+        close_clicked = top_cols[4].button("Close", use_container_width=True)
+
+        if reload_clicked:
+            if str(article["Template_Name"]).strip():
+                load_template(selected_article, article["Template_Name"])
+                st.success(f"Template reloaded for {selected_article}.")
+                st.rerun()
+            else:
+                st.warning("Select a template first.")
+
+        if add_clicked:
             breakdown = get_breakdown(selected_article)
             selected_rows = breakdown[breakdown["Select"].fillna(False)]
             if not selected_rows.empty:
@@ -732,22 +759,43 @@ if selected_article:
             set_breakdown(selected_article, breakdown)
             st.rerun()
 
-        if top_cols[1].button("Delete Selected", use_container_width=True):
+        if delete_clicked:
             if delete_selected_breakdown_rows(selected_article):
                 st.success("Selected rows deleted.")
                 st.rerun()
             else:
                 st.warning("Select at least one row to delete.")
 
-        if top_cols[2].button("Reload Template", use_container_width=True):
-            if str(article["Template_Name"]).strip():
-                load_template(selected_article, article["Template_Name"])
-                st.success(f"Template reloaded for {selected_article}.")
-                st.rerun()
-            else:
-                st.warning("Select a template first.")
+        preview_df, preview_unit_price, preview_total_price, preview_errors = calculate_article(
+            article, get_breakdown(selected_article)
+        )
 
-        if top_cols[3].button("Calculate This Article", use_container_width=True):
+        edited_breakdown = st.data_editor(
+            preview_df,
+            num_rows="dynamic" if st.session_state.edit_mode else "fixed",
+            use_container_width=True,
+            hide_index=True,
+            key=f"breakdown_editor_{selected_article}",
+            disabled=not st.session_state.edit_mode,
+            column_config={
+                "Select": st.column_config.CheckboxColumn("Select"),
+                "Type": st.column_config.SelectboxColumn("Type", options=["O", "S", "M"]),
+                "Level": st.column_config.NumberColumn("Level", format="%d"),
+                "Category": st.column_config.TextColumn("Category"),
+                "Code": st.column_config.TextColumn("Code"),
+                "Description": st.column_config.TextColumn("Description"),
+                "Norm": st.column_config.SelectboxColumn("Norm", options=["N", "C"]),
+                "Formula": st.column_config.TextColumn("Formula"),
+                "Resultant": st.column_config.NumberColumn("Resultant", format="%.3f", disabled=True),
+                "Quantity": st.column_config.NumberColumn("Quantity", format="%.3f", disabled=True),
+                "Unit": st.column_config.TextColumn("Unit"),
+                "Unit Price": st.column_config.NumberColumn("Unit Price", format="%.4f"),
+                "Total Cost": st.column_config.NumberColumn("Total Cost", format="%.2f", disabled=True),
+            },
+        )
+        set_breakdown(selected_article, edited_breakdown)
+
+        if calc_clicked:
             result_df, unit_price, total_price, errors = calculate_article(article, get_breakdown(selected_article))
             set_breakdown(selected_article, result_df)
             row_index = article_row.index[0]
@@ -761,30 +809,9 @@ if selected_article:
                 st.success("Selected article calculated.")
             st.rerun()
 
-        if top_cols[4].button("Close", use_container_width=True):
+        if close_clicked:
             st.session_state.selected_article = None
             st.rerun()
-
-        edited_breakdown = st.data_editor(
-            breakdown_editor_df(selected_article),
-            num_rows="dynamic" if st.session_state.edit_mode else "fixed",
-            use_container_width=True,
-            hide_index=True,
-            key=f"breakdown_editor_{selected_article}",
-            disabled=not st.session_state.edit_mode,
-            column_config={
-                "Select": st.column_config.CheckboxColumn("Select"),
-                "Type": st.column_config.SelectboxColumn("Type", options=["O", "S", "M"]),
-                "Level": st.column_config.NumberColumn("Level", format="%d"),
-                "Norm": st.column_config.SelectboxColumn("Norm", options=["N", "C"]),
-                "Formula": st.column_config.TextColumn("Formula"),
-                "Resultant": st.column_config.NumberColumn("Resultant", format="%.3f", disabled=True),
-                "Quantity": st.column_config.NumberColumn("Quantity", format="%.3f", disabled=True),
-                "Unit Price": st.column_config.NumberColumn("Unit Price", format="%.4f"),
-                "Total Cost": st.column_config.NumberColumn("Total Cost", format="%.2f", disabled=True),
-            },
-        )
-        set_breakdown(selected_article, edited_breakdown)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
