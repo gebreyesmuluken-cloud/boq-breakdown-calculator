@@ -413,10 +413,6 @@ def fmt_money(value):
     return f"{float(value):,.2f}"
 
 
-def boq_grid_df() -> pd.DataFrame:
-    return st.session_state.boq_df.copy()[BOQ_COLUMNS]
-
-
 def article_summary(article_id: str) -> tuple[float, float]:
     row = st.session_state.boq_df[st.session_state.boq_df["Article_ID"].astype(str) == str(article_id)]
     if row.empty:
