@@ -289,7 +289,17 @@ def normalize_library_columns(df: pd.DataFrame) -> pd.DataFrame:
     }
     work = df.copy()
     work.columns = [rename_map.get(str(column).strip().lower(), column) for column in work.columns]
-    required = ["Template_Name", "Type", "Category", "Code", "Description", "Norm", "Formula", "Unit", "Unit Price"]
+    required = [
+        "Template_Name",
+        "Type",
+        "Category",
+        "Code",
+        "Description",
+        "Norm",
+        "Formula",
+        "Unit",
+        "Unit Price",
+    ]
     for column in required:
         if column not in work.columns:
             raise ValueError(f"Library file is missing required column: {column}")
@@ -350,20 +360,20 @@ def calculate_article(article_row: pd.Series, breakdown_df: pd.DataFrame):
 
     def close_subgroup(end_idx: int):
         nonlocal current_subgroup_start
-        if current_subgroup_start is None:
+        if current_subgroup_start is None or end_idx < current_subgroup_start:
             return
         subtotal = pd.to_numeric(
-            work.loc[current_subgroup_start + 1:end_idx, "Total Cost"], errors="coerce"
+            work.loc[current_subgroup_start + 1 : end_idx, "Total Cost"], errors="coerce"
         ).fillna(0.0).sum()
         work.at[current_subgroup_start, "Unit Price"] = None
         work.at[current_subgroup_start, "Total Cost"] = subtotal
 
     def close_overall(end_idx: int):
         nonlocal current_overall_start
-        if current_overall_start is None:
+        if current_overall_start is None or end_idx < current_overall_start:
             return
         subtotal = pd.to_numeric(
-            work.loc[current_overall_start + 1:end_idx, "Total Cost"], errors="coerce"
+            work.loc[current_overall_start + 1 : end_idx, "Total Cost"], errors="coerce"
         ).fillna(0.0).sum()
         work.at[current_overall_start, "Unit Price"] = None
         work.at[current_overall_start, "Total Cost"] = subtotal
@@ -379,6 +389,7 @@ def calculate_article(article_row: pd.Series, breakdown_df: pd.DataFrame):
             close_subgroup(index - 1)
             close_overall(index - 1)
             current_overall_start = index
+            current_subgroup_start = None
             current_subgroup_qty = boq_qty
         elif row_type == "S":
             close_subgroup(index - 1)
@@ -409,4 +420,206 @@ def calculate_article(article_row: pd.Series, breakdown_df: pd.DataFrame):
             elif norm == "C":
                 quantity = resultant
             else:
-                errors.append(f"{article_row['Article_ID']}
+                errors.append(f"{article_row['Article_ID']} - row {index + 1}: Norm must be F or C")
+            total_cost = quantity * unit_price
+        else:
+            errors.append(
+                f"{article_row['Article_ID']} - row {index + 1}: Type must be O, S, or M"
+            )
+
+        work.at[index, "Resultant"] = resultant
+        work.at[index, "Quantity"] = quantity
+        if row_type in {"O", "S"}:
+            work.at[index, "Unit Price"] = None
+        work.at[index, "Total Cost"] = total_cost
+
+    close_subgroup(len(work) - 1)
+    close_overall(len(work) - 1)
+
+    overall_total = float(pd.to_numeric(work["Total Cost"], errors="coerce").fillna(0.0).sum())
+    unit_price = overall_total / boq_qty if boq_qty else 0.0
+    return work, unit_price, overall_total, errors
+
+
+def recalculate_all():
+    errors = []
+    boq = st.session_state.boq_df.copy()
+
+    for idx, article in boq.iterrows():
+        article_id = str(article["Article_ID"])
+        template_name = str(article.get("Template_Name", "")).strip()
+        ensure_article_breakdown(article_id, template_name)
+        breakdown = get_breakdown(article_id)
+        calculated, unit_price, total_price, article_errors = calculate_article(article, breakdown)
+        set_breakdown(article_id, calculated)
+        boq.at[idx, "Unit Price"] = unit_price if unit_price else None
+        boq.at[idx, "Total Price"] = total_price if total_price else None
+        errors.extend(article_errors)
+
+    st.session_state.boq_df = boq
+    return errors
+
+
+def dataframe_to_excel_bytes(df: pd.DataFrame, sheet_name: str) -> bytes:
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+    return output.getvalue()
+
+
+def build_export_workbook() -> bytes:
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        st.session_state.boq_df.to_excel(writer, index=False, sheet_name="BOQ")
+        st.session_state.library_df.to_excel(writer, index=False, sheet_name="Library")
+        for article_id, breakdown in st.session_state.breakdowns.items():
+            sheet_name = f"BD_{article_id}"[:31]
+            breakdown.to_excel(writer, index=False, sheet_name=sheet_name)
+    return output.getvalue()
+
+
+def save_snapshot():
+    st.session_state.last_saved_at = datetime.now()
+    timestamp = st.session_state.last_saved_at.strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.save_message = f"Snapshot prepared at {timestamp}"
+
+
+init_state()
+
+st.title("BOQ Breakdown Calculator")
+st.caption("Manage BOQ items, template libraries, and calculated cost breakdowns in one place.")
+
+with st.sidebar:
+    st.subheader("Data")
+    boq_upload = st.file_uploader("Import BOQ", type=["xlsx", "xls", "csv"], key="boq_upload")
+    library_upload = st.file_uploader(
+        "Import Library", type=["xlsx", "xls", "csv"], key="library_upload"
+    )
+
+    if boq_upload is not None:
+        try:
+            if boq_upload.name.lower().endswith(".csv"):
+                imported_boq = pd.read_csv(boq_upload)
+            else:
+                imported_boq = pd.read_excel(boq_upload)
+            st.session_state.boq_df = normalize_boq_columns(imported_boq)
+            st.session_state.breakdowns = {}
+            st.success("BOQ imported successfully.")
+        except Exception as exc:
+            st.error(f"Failed to import BOQ: {exc}")
+
+    if library_upload is not None:
+        try:
+            if library_upload.name.lower().endswith(".csv"):
+                imported_library = pd.read_csv(library_upload)
+            else:
+                imported_library = pd.read_excel(library_upload)
+            st.session_state.library_df = normalize_library_columns(imported_library)
+            st.success("Library imported successfully.")
+        except Exception as exc:
+            st.error(f"Failed to import library: {exc}")
+
+    if st.button("Recalculate", use_container_width=True):
+        calc_errors = recalculate_all()
+        if calc_errors:
+            st.warning("\n".join(calc_errors))
+        else:
+            st.success("All article totals recalculated.")
+
+    if st.button("Save Snapshot", use_container_width=True):
+        save_snapshot()
+
+    st.download_button(
+        "Download BOQ",
+        data=dataframe_to_excel_bytes(st.session_state.boq_df, "BOQ"),
+        file_name="boq.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+
+    st.download_button(
+        "Download Workbook",
+        data=build_export_workbook(),
+        file_name="boq_breakdown_export.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+
+    if st.session_state.save_message:
+        st.info(st.session_state.save_message)
+
+boq_tab, library_tab, breakdown_tab = st.tabs(["BOQ", "Library", "Breakdown"])
+
+with boq_tab:
+    st.subheader("Bill of Quantities")
+    edited_boq = st.data_editor(
+        st.session_state.boq_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="boq_editor",
+    )
+    st.session_state.boq_df = normalize_boq_columns(edited_boq)
+
+with library_tab:
+    st.subheader("Template Library")
+    edited_library = st.data_editor(
+        st.session_state.library_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="library_editor",
+    )
+    st.session_state.library_df = normalize_library_columns(edited_library)
+
+with breakdown_tab:
+    st.subheader("Article Breakdown")
+    boq_df = st.session_state.boq_df
+    article_options = boq_df["Article_ID"].astype(str).tolist()
+
+    if article_options:
+        default_index = 0
+        if st.session_state.selected_article in article_options:
+            default_index = article_options.index(st.session_state.selected_article)
+
+        selected_article = st.selectbox(
+            "Select article",
+            options=article_options,
+            index=default_index,
+        )
+        st.session_state.selected_article = selected_article
+
+        selected_row = boq_df[boq_df["Article_ID"].astype(str) == selected_article].iloc[0]
+        template_name = str(selected_row.get("Template_Name", "")).strip()
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.write(f"Description: {selected_row['Description']}")
+            st.write(f"Quantity: {selected_row['Quantity']} {selected_row['Unit']}")
+        with col2:
+            if st.button("Load Template for Article", use_container_width=True):
+                load_template(selected_article, template_name)
+            if st.button("Calculate This Article", use_container_width=True):
+                breakdown = get_breakdown(selected_article)
+                calculated, unit_price, total_price, calc_errors = calculate_article(
+                    selected_row, breakdown
+                )
+                set_breakdown(selected_article, calculated)
+                row_index = boq_df[boq_df["Article_ID"].astype(str) == selected_article].index[0]
+                st.session_state.boq_df.at[row_index, "Unit Price"] = unit_price if unit_price else None
+                st.session_state.boq_df.at[row_index, "Total Price"] = (
+                    total_price if total_price else None
+                )
+                if calc_errors:
+                    st.warning("\n".join(calc_errors))
+                else:
+                    st.success("Article breakdown calculated.")
+
+        ensure_article_breakdown(selected_article, template_name)
+        edited_breakdown = st.data_editor(
+            get_breakdown(selected_article),
+            num_rows="dynamic",
+            use_container_width=True,
+            key=f"breakdown_editor_{selected_article}",
+        )
+        set_breakdown(selected_article, edited_breakdown)
+    else:
+        st.info("Add at least one BOQ article to manage breakdowns.")
