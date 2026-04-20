@@ -269,6 +269,8 @@ def init_state():
         st.session_state.save_message = ""
     if "last_saved_at" not in st.session_state:
         st.session_state.last_saved_at = None
+    if "selected_breakdown_rows" not in st.session_state:
+        st.session_state.selected_breakdown_rows = {}
 
 
 def empty_breakdown_df():
@@ -565,18 +567,13 @@ def save_snapshot():
     st.session_state.save_message = f"Snapshot prepared at {timestamp}"
 
 
-def style_breakdown_rows(df: pd.DataFrame):
-    def row_style(row):
-        row_type = normalize_type_value(row.get("Type", ""))
-        colors = {
-            "O": "#fff4cc",
-            "S": "#dff3ff",
-            "M": "#eef7e8",
-        }
-        color = colors.get(row_type, "#ffffff")
-        return [f"background-color: {color}"] * len(row)
-
-    return df.style.apply(row_style, axis=1)
+def get_group_marker(row_type: str) -> str:
+    markers = {
+        "O": "O",
+        "S": "S",
+        "M": "M",
+    }
+    return markers.get(normalize_type_value(row_type), "")
 
 
 def make_new_breakdown_row(row_type: str) -> dict:
@@ -645,6 +642,81 @@ def insert_breakdown_row(article_id: str, selected_index: int, new_type: str):
     updated = pd.concat([upper, new_row, lower], ignore_index=True)
     set_breakdown(article_id, updated)
     return None
+
+
+def delete_breakdown_row(article_id: str, selected_index: int):
+    breakdown = get_breakdown(article_id).reset_index(drop=True)
+    if breakdown.empty:
+        return "No row to delete."
+    if selected_index < 0 or selected_index >= len(breakdown):
+        return "Select a row first."
+
+    selected_type = normalize_type_value(breakdown.at[selected_index, "Type"])
+    if selected_type == "O":
+        return "O row cannot be deleted. Each article must keep one O row."
+
+    selected_level = normalize_level_value(breakdown.at[selected_index, "Level"], selected_type)
+    delete_to = selected_index + 1
+    while delete_to < len(breakdown):
+        next_type = normalize_type_value(breakdown.at[delete_to, "Type"])
+        next_level = normalize_level_value(breakdown.at[delete_to, "Level"], next_type)
+        if next_level <= selected_level:
+            break
+        delete_to += 1
+
+    updated = pd.concat([breakdown.iloc[:selected_index], breakdown.iloc[delete_to:]], ignore_index=True)
+    set_breakdown(article_id, updated)
+    return None
+
+
+def infer_add_target(article_id: str, selected_index: int):
+    breakdown = get_breakdown(article_id).reset_index(drop=True)
+    if breakdown.empty:
+        return None, "No breakdown rows found."
+    if selected_index is None or selected_index < 0 or selected_index >= len(breakdown):
+        return None, "Select a row first."
+
+    selected_type = normalize_type_value(breakdown.at[selected_index, "Type"])
+    if selected_type == "O":
+        return ("S", selected_index), None
+    if selected_type == "S":
+        return ("M", selected_index), None
+    if selected_type == "M":
+        parent_index = selected_index - 1
+        while parent_index >= 0:
+            parent_type = normalize_type_value(breakdown.at[parent_index, "Type"])
+            if parent_type == "S":
+                return ("M", parent_index), None
+            parent_index -= 1
+        return None, "Selected M row is missing a parent S row."
+    return None, "Unsupported row type."
+
+
+def build_breakdown_editor_df(article_id: str) -> pd.DataFrame:
+    breakdown = get_breakdown(article_id).reset_index(drop=True)
+    selected_index = st.session_state.selected_breakdown_rows.get(article_id)
+    selected_flags = [False] * len(breakdown)
+    if selected_index is not None and 0 <= selected_index < len(breakdown):
+        selected_flags[selected_index] = True
+
+    editor_df = breakdown.copy()
+    editor_df.insert(0, "Select", selected_flags)
+    editor_df.insert(1, "Group", editor_df["Type"].apply(get_group_marker))
+    return editor_df
+
+
+def persist_breakdown_editor_df(article_id: str, editor_df: pd.DataFrame):
+    work = editor_df.copy().reset_index(drop=True)
+    selected_rows = work.index[work["Select"] == True].tolist()
+    st.session_state.selected_breakdown_rows[article_id] = selected_rows[0] if selected_rows else None
+
+    if len(selected_rows) > 1:
+        first = selected_rows[0]
+        work["Select"] = False
+        work.at[first, "Select"] = True
+
+    cleaned = work.drop(columns=["Select", "Group"], errors="ignore")
+    set_breakdown(article_id, cleaned)
 
 
 init_state()
@@ -781,48 +853,45 @@ with boq_tab:
                 else:
                     st.success(f"Breakdown calculated for {selected_article}.")
 
-        breakdown_df = get_breakdown(selected_article)
-        selector_event = st.dataframe(
-            breakdown_df,
-            use_container_width=True,
-            hide_index=True,
-            on_select="rerun",
-            selection_mode="single-row",
-            key=f"breakdown_selector_{selected_article}",
-        )
-        selected_breakdown_rows = selector_event.selection.get("rows", []) if selector_event else []
-        selected_breakdown_index = selected_breakdown_rows[0] if selected_breakdown_rows else None
+        selected_breakdown_index = st.session_state.selected_breakdown_rows.get(selected_article)
 
-        add_s_col, add_m_col = st.columns(2)
-        with add_s_col:
-            if st.button("Add S Row", use_container_width=True, key=f"add_s_{selected_article}"):
-                if selected_breakdown_index is None:
-                    st.warning("Select an O row first.")
+        add_col, delete_col = st.columns(2)
+        with add_col:
+            if st.button("Add", use_container_width=True, key=f"add_row_{selected_article}"):
+                target, message = infer_add_target(selected_article, selected_breakdown_index)
+                if message:
+                    st.warning(message)
                 else:
-                    message = insert_breakdown_row(selected_article, selected_breakdown_index, "S")
+                    new_type, parent_index = target
+                    message = insert_breakdown_row(selected_article, parent_index, new_type)
                     if message:
                         st.warning(message)
-        with add_m_col:
-            if st.button("Add M Row", use_container_width=True, key=f"add_m_{selected_article}"):
+        with delete_col:
+            if st.button("Delete Row", use_container_width=True, key=f"delete_row_{selected_article}"):
                 if selected_breakdown_index is None:
-                    st.warning("Select an S row first.")
+                    st.warning("Select a row first.")
                 else:
-                    message = insert_breakdown_row(selected_article, selected_breakdown_index, "M")
+                    message = delete_breakdown_row(selected_article, selected_breakdown_index)
                     if message:
                         st.warning(message)
+                    else:
+                        st.session_state.selected_breakdown_rows[selected_article] = None
 
-        st.caption("Color groups: O = yellow, S = blue, M = green.")
-        st.dataframe(
-            style_breakdown_rows(get_breakdown(selected_article)),
-            use_container_width=True,
-            hide_index=True,
-        )
+        st.caption("Select one row, then use Add or Delete above. Add is automatic: O -> S, S -> M, M -> new M under the same S.")
 
         edited_breakdown = st.data_editor(
-            get_breakdown(selected_article),
+            build_breakdown_editor_df(selected_article),
             num_rows="dynamic",
             use_container_width=True,
             column_config={
+                "Select": st.column_config.CheckboxColumn(
+                    "Select",
+                    default=False,
+                ),
+                "Group": st.column_config.TextColumn(
+                    "Group",
+                    disabled=True,
+                ),
                 "Norm": st.column_config.SelectboxColumn(
                     "Norm",
                     options=["N", "C"],
@@ -831,7 +900,7 @@ with boq_tab:
             },
             key=f"breakdown_editor_{selected_article}",
         )
-        set_breakdown(selected_article, edited_breakdown)
+        persist_breakdown_editor_df(selected_article, edited_breakdown)
         calculate_and_store_article(selected_article)
     else:
         st.info("Add at least one BOQ article to manage breakdowns.")
