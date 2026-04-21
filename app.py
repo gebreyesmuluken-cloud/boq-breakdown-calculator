@@ -1,11 +1,18 @@
 import io
+import json
 import math
+import re
+import sqlite3
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="BOQ Desk", layout="wide")
+
+APP_TITLE = "BOQ Desk"
+DB_PATH = Path("boq_desk.db")
 
 BOQ_COLUMNS = [
     "Article_ID",
@@ -221,6 +228,87 @@ SAFE_GLOBALS = {
 }
 
 
+def db_connection():
+    return sqlite3.connect(DB_PATH)
+
+
+def init_db():
+    with db_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS projects (
+                project_name TEXT PRIMARY KEY,
+                boq_json TEXT NOT NULL,
+                breakdowns_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+
+
+def list_saved_projects() -> list[str]:
+    with db_connection() as conn:
+        rows = conn.execute(
+            "SELECT project_name FROM projects ORDER BY updated_at DESC, project_name ASC"
+        ).fetchall()
+    return [row[0] for row in rows]
+
+
+def save_project_to_db(project_name: str, boq_df: pd.DataFrame, breakdowns: dict[str, pd.DataFrame]):
+    breakdown_payload = {
+        article_id: df[BREAKDOWN_COLUMNS].to_dict(orient="records")
+        for article_id, df in breakdowns.items()
+    }
+    with db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO projects (project_name, boq_json, breakdowns_json, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(project_name) DO UPDATE SET
+                boq_json=excluded.boq_json,
+                breakdowns_json=excluded.breakdowns_json,
+                updated_at=excluded.updated_at
+            """,
+            (
+                project_name,
+                boq_df[BOQ_COLUMNS].to_json(orient="records"),
+                json.dumps(breakdown_payload),
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            ),
+        )
+        conn.commit()
+
+
+def load_project_from_db(project_name: str):
+    with db_connection() as conn:
+        row = conn.execute(
+            "SELECT boq_json, breakdowns_json FROM projects WHERE project_name = ?",
+            (project_name,),
+        ).fetchone()
+
+    if not row:
+        raise ValueError(f"Project '{project_name}' was not found.")
+
+    boq_json, breakdowns_json = row
+    boq_df = pd.DataFrame(json.loads(boq_json))
+    boq_df = normalize_boq_columns(boq_df)
+
+    loaded_breakdowns = {}
+    raw_breakdowns = json.loads(breakdowns_json)
+    for article_id, rows in raw_breakdowns.items():
+        loaded_breakdowns[article_id] = normalize_breakdown_template_columns(pd.DataFrame(rows))
+
+    return boq_df, loaded_breakdowns
+
+
+def safe_project_filename(name: str) -> str:
+    text = str(name).strip() or "boq_desk_project"
+    text = re.sub(r'[<>:"/\\|?*]+', "_", text)
+    text = re.sub(r"\s+", "_", text)
+    return text
+
+
 def normalize_type_value(value) -> str:
     value = str(value).strip().upper()
     return {"T": "O", "D": "M"}.get(value, value)
@@ -245,6 +333,10 @@ def init_state():
         st.session_state.save_message = ""
     if "breakdown_save_message" not in st.session_state:
         st.session_state.breakdown_save_message = ""
+    if "project_name" not in st.session_state:
+        st.session_state.project_name = "BOQ Project"
+    if "selected_saved_project" not in st.session_state:
+        st.session_state.selected_saved_project = ""
 
 
 def empty_breakdown_df():
@@ -336,32 +428,7 @@ def get_breakdown(article_id: str) -> pd.DataFrame:
 
 
 def set_breakdown(article_id: str, df: pd.DataFrame):
-    work = df.copy()
-    defaults = {
-        "Select": False,
-        "Type": "M",
-        "Level": 2,
-        "Category": "",
-        "Code": "",
-        "Description": "",
-        "Norm": "N",
-        "Formula": "1",
-        "Resultant": None,
-        "Quantity": None,
-        "Unit": "",
-        "Unit Price": 0.0,
-        "Total Cost": None,
-    }
-
-    for column in BREAKDOWN_COLUMNS:
-        if column not in work.columns:
-            work[column] = defaults[column]
-
-    work["Type"] = work["Type"].apply(normalize_type_value)
-    work["Norm"] = work["Norm"].apply(normalize_norm_value)
-    work["Level"] = pd.to_numeric(work["Level"], errors="coerce").fillna(0).astype(int)
-    work["Select"] = work["Select"].fillna(False).astype(bool)
-
+    work = normalize_breakdown_template_columns(df.copy()) if not df.empty else empty_breakdown_df()
     st.session_state.breakdowns[article_id] = work[BREAKDOWN_COLUMNS].copy()
 
 
@@ -379,7 +446,7 @@ def eval_formula(formula_text: str) -> float:
 
 
 def calculate_article(article_row: pd.Series, breakdown_df: pd.DataFrame):
-    work = breakdown_df.copy().reset_index(drop=True)
+    work = normalize_breakdown_template_columns(breakdown_df.copy()).reset_index(drop=True)
     if work.empty:
         return work, 0.0, 0.0, []
 
@@ -555,6 +622,7 @@ def color_badge_html():
     """
 
 
+init_db()
 init_state()
 
 st.markdown(
@@ -615,57 +683,98 @@ st.markdown(
 
 st.markdown("<div class='excel-shell'>", unsafe_allow_html=True)
 st.markdown("<div class='toolbar'>", unsafe_allow_html=True)
-st.markdown("<div class='sheet-title'>BOQ Desk</div>", unsafe_allow_html=True)
+st.markdown(f"<div class='sheet-title'>{APP_TITLE}</div>", unsafe_allow_html=True)
 st.markdown(
-    "<div class='sheet-subtitle'>Import BOQ above, then open any article to import or edit its own breakdown template.</div>",
+    "<div class='sheet-subtitle'>Import BOQ above, open any article, import or edit its breakdown, then save the whole project.</div>",
     unsafe_allow_html=True,
 )
 
-toolbar_cols = st.columns([1.5, 1.5, 1.0, 1.0, 1.4, 1.4])
-boq_file = toolbar_cols[0].file_uploader("Import Excel", type=["xlsx"], key="boq_upload")
+toolbar_cols = st.columns([1.4, 1.2, 1.2, 1.1, 1.1, 1.1, 1.2])
+st.session_state.project_name = toolbar_cols[0].text_input(
+    "Project Name",
+    value=st.session_state.project_name,
+)
+
+boq_file = toolbar_cols[1].file_uploader("Import Excel", type=["xlsx"], key="boq_upload")
 
 try:
     export_data = export_excel()
-    toolbar_cols[1].download_button(
+    toolbar_cols[2].download_button(
         "Export Excel",
         data=export_data,
-        file_name="boq_breakdown_result.xlsx",
+        file_name=f"{safe_project_filename(st.session_state.project_name)}_boq_desk.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
     )
 except Exception:
-    toolbar_cols[1].button("Export Excel", disabled=True, use_container_width=True)
+    toolbar_cols[2].button("Export Excel", disabled=True, use_container_width=True)
 
-if toolbar_cols[2].button("Save", use_container_width=True):
-    st.session_state.save_message = f"Draft saved in session at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+if toolbar_cols[3].button("Save Project", use_container_width=True):
+    try:
+        save_project_to_db(
+            st.session_state.project_name,
+            st.session_state.boq_df,
+            st.session_state.breakdowns,
+        )
+        st.session_state.save_message = (
+            f"Project '{st.session_state.project_name}' saved at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+    except Exception as exc:
+        st.error(f"Project save failed: {exc}")
 
-if toolbar_cols[3].button("Edit On" if st.session_state.edit_mode else "Edit Off", use_container_width=True):
+if toolbar_cols[4].button("Edit On" if st.session_state.edit_mode else "Edit Off", use_container_width=True):
     st.session_state.edit_mode = not st.session_state.edit_mode
 
-run_clicked = toolbar_cols[4].button("Run Calculation", type="primary", use_container_width=True)
-load_sample_clicked = toolbar_cols[5].button("Load Sample", use_container_width=True)
+run_clicked = toolbar_cols[5].button("Run Calculation", type="primary", use_container_width=True)
+load_sample_clicked = toolbar_cols[6].button("Load Sample", use_container_width=True)
+
+saved_projects = list_saved_projects()
+load_cols = st.columns([2.0, 1.0, 4.0])
+st.session_state.selected_saved_project = load_cols[0].selectbox(
+    "Saved Projects",
+    options=[""] + saved_projects,
+    index=([""] + saved_projects).index(st.session_state.selected_saved_project)
+    if st.session_state.selected_saved_project in saved_projects
+    else 0,
+)
+
+if load_cols[1].button("Load Project", use_container_width=True):
+    if st.session_state.selected_saved_project:
+        try:
+            boq_df_loaded, breakdowns_loaded = load_project_from_db(st.session_state.selected_saved_project)
+            st.session_state.project_name = st.session_state.selected_saved_project
+            st.session_state.boq_df = boq_df_loaded
+            st.session_state.breakdowns = breakdowns_loaded
+            st.session_state.selected_article = None
+            st.session_state.breakdown_save_message = ""
+            st.session_state.save_message = f"Project '{st.session_state.selected_saved_project}' loaded."
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Project load failed: {exc}")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
 if boq_file is not None:
-    load_cols = st.columns([1.2, 5])
-    if load_cols[0].button("Load Imported Files", use_container_width=True):
+    import_cols = st.columns([1.2, 5])
+    if import_cols[0].button("Load Imported BOQ", use_container_width=True):
         try:
             st.session_state.boq_df = normalize_boq_columns(pd.read_excel(boq_file))
             st.session_state.breakdowns = {
                 article_id: df.copy() for article_id, df in DEFAULT_BREAKDOWNS.items()
             }
             st.session_state.selected_article = None
-            st.success("Imported files loaded.")
+            st.success("BOQ file loaded into the BOQ panel.")
         except Exception as exc:
             st.error(str(exc))
 
 if load_sample_clicked:
+    st.session_state.project_name = "BOQ Project"
     st.session_state.boq_df = DEFAULT_BOQ.copy()
     st.session_state.breakdowns = {
         article_id: df.copy() for article_id, df in DEFAULT_BREAKDOWNS.items()
     }
     st.session_state.selected_article = None
+    st.session_state.breakdown_save_message = ""
     st.success("Sample data loaded.")
 
 if run_clicked:
