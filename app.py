@@ -5,7 +5,7 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="BOQ Breakdown Calculation", layout="wide")
+st.set_page_config(page_title="BOQ Desk", layout="wide")
 
 BOQ_COLUMNS = [
     "Article_ID",
@@ -615,7 +615,7 @@ st.markdown(
 
 st.markdown("<div class='excel-shell'>", unsafe_allow_html=True)
 st.markdown("<div class='toolbar'>", unsafe_allow_html=True)
-st.markdown("<div class='sheet-title'>BOQ Breakdown Calculation</div>", unsafe_allow_html=True)
+st.markdown("<div class='sheet-title'>BOQ Desk</div>", unsafe_allow_html=True)
 st.markdown(
     "<div class='sheet-subtitle'>Import BOQ above, then open any article to import or edit its own breakdown template.</div>",
     unsafe_allow_html=True,
