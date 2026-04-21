@@ -5,7 +5,7 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="BOQ Breakdown Calculator", layout="wide")
+st.set_page_config(page_title="BOQ Breakdown Calculation", layout="wide")
 
 BOQ_COLUMNS = [
     "Article_ID",
@@ -275,6 +275,58 @@ def normalize_boq_columns(df: pd.DataFrame) -> pd.DataFrame:
         work["Total Price"] = None
 
     return work[BOQ_COLUMNS].copy()
+
+
+def normalize_breakdown_template_columns(df: pd.DataFrame) -> pd.DataFrame:
+    rename_map = {
+        "select": "Select",
+        "type": "Type",
+        "level": "Level",
+        "category": "Category",
+        "catagory": "Category",
+        "code": "Code",
+        "description": "Description",
+        "describtion": "Description",
+        "norm": "Norm",
+        "formula": "Formula",
+        "resultant": "Resultant",
+        "quantity": "Quantity",
+        "unit": "Unit",
+        "unit price": "Unit Price",
+        "unit_price": "Unit Price",
+        "total cost": "Total Cost",
+        "total_cost": "Total Cost",
+    }
+
+    work = df.copy()
+    work.columns = [rename_map.get(str(c).strip().lower(), c) for c in work.columns]
+
+    defaults = {
+        "Select": False,
+        "Type": "M",
+        "Level": 2,
+        "Category": "",
+        "Code": "",
+        "Description": "",
+        "Norm": "N",
+        "Formula": "1",
+        "Resultant": None,
+        "Quantity": None,
+        "Unit": "",
+        "Unit Price": 0.0,
+        "Total Cost": None,
+    }
+
+    for column, value in defaults.items():
+        if column not in work.columns:
+            work[column] = value
+
+    work["Type"] = work["Type"].apply(normalize_type_value)
+    work["Norm"] = work["Norm"].apply(normalize_norm_value)
+    work["Level"] = pd.to_numeric(work["Level"], errors="coerce").fillna(0).astype(int)
+    work["Select"] = work["Select"].fillna(False).astype(bool)
+
+    return work[BREAKDOWN_COLUMNS].copy()
 
 
 def get_breakdown(article_id: str) -> pd.DataFrame:
@@ -563,9 +615,9 @@ st.markdown(
 
 st.markdown("<div class='excel-shell'>", unsafe_allow_html=True)
 st.markdown("<div class='toolbar'>", unsafe_allow_html=True)
-st.markdown("<div class='sheet-title'>BOQ Breakdown Calculator</div>", unsafe_allow_html=True)
+st.markdown("<div class='sheet-title'>BOQ Breakdown Calculation</div>", unsafe_allow_html=True)
 st.markdown(
-    "<div class='sheet-subtitle'>Click an Article_ID like A002 to open that article's own blank manual breakdown table.</div>",
+    "<div class='sheet-subtitle'>Import BOQ above, then open any article to import or edit its own breakdown template.</div>",
     unsafe_allow_html=True,
 )
 
@@ -709,19 +761,42 @@ if selected_article:
         )
         st.markdown(color_badge_html(), unsafe_allow_html=True)
 
-        top_cols = st.columns([1.0, 1.0, 1.2, 1.2, 1.0])
+        top_cols = st.columns([1.0, 1.0, 1.2, 1.3, 1.0, 1.2])
         add_clicked = top_cols[0].button("Add Row", use_container_width=True)
         delete_clicked = top_cols[1].button("Delete Selected", use_container_width=True)
         save_breakdown_clicked = top_cols[2].button("Save Breakdown", use_container_width=True)
         calc_clicked = top_cols[3].button("Calculate This Article", use_container_width=True)
         close_clicked = top_cols[4].button("Close", use_container_width=True)
+        template_file = top_cols[5].file_uploader(
+            "Import Template",
+            type=["xlsx"],
+            key=f"template_upload_{selected_article}",
+            label_visibility="collapsed",
+        )
+
+        if template_file is not None:
+            if st.button(
+                "Load Template Into This Article",
+                key=f"load_template_{selected_article}",
+                use_container_width=True,
+            ):
+                try:
+                    template_df = pd.read_excel(template_file)
+                    template_df = normalize_breakdown_template_columns(template_df)
+                    set_breakdown(selected_article, template_df)
+                    st.session_state.breakdown_save_message = f"Template loaded into {selected_article}."
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Template import failed: {exc}")
 
         if add_clicked:
             breakdown = get_breakdown(selected_article)
             selected_rows = breakdown[breakdown["Select"].fillna(False)] if not breakdown.empty else pd.DataFrame()
+
             if not selected_rows.empty:
                 selected_index = selected_rows.index[0]
                 selected_type = normalize_type_value(selected_rows.iloc[0]["Type"])
+
                 if selected_type == "M":
                     insert_at = selected_index + 1
                     new_row = make_new_breakdown_row("M", 2)
